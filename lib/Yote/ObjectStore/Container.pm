@@ -9,7 +9,6 @@ use constant {
     DATA     => 1,
     STORE    => 2,
     VOLATILE => 3,
-    META     => 4,
 };
 
 #
@@ -254,7 +253,6 @@ sub __reconstitute {
         {@parts},
         $store,
 	{},
-        {updated => $update_time, created => $creation_time},
         ], $class;
     # stuff into WEAK temporarily while LOAD happens
     $store->weak($id,$obj);

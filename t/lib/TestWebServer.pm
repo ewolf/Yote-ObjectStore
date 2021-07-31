@@ -6,7 +6,7 @@ use warnings;
 use HTTP::Server::Simple::CGI;
 use base 'HTTP::Server::Simple::CGI';
 
-use Yote;
+#use Yote;
 
 sub handle_request {
     my( $self, $cgi ) = @_;

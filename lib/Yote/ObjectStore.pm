@@ -86,7 +86,6 @@ sub fetch_root {
 
     my $root = $self->fetch( $root_id );
     if ($root) {
-        $record_store->unlock;
         return $root;
     }
     # if ($record_store->get_record_count > 0) {
