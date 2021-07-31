@@ -1,5 +1,9 @@
 package Yote::ObjectStore;
 
+# TODO - perldoc explaining method signatures and methods
+#      - Container --> Obj
+#      - move lock out of RecordStore to its own thing
+
 use strict;
 use warnings;
 no warnings 'uninitialized';
@@ -275,6 +279,7 @@ sub _id {
         }
         my $id = $self->_new_id;
 	my @contents = @$item;
+        @$item = ();  # this is where the leak was coming from
         tie @$item, 'Yote::ObjectStore::Array', $id, $self;
 	push @$item, @contents;
         $self->weak( $id, $item );
@@ -288,6 +293,7 @@ sub _id {
         }
         my $id = $self->_new_id;
 	my %contents = %$item;
+        %$item = ();  # this is where the leak was coming frmo
         tie %$item, 'Yote::ObjectStore::Hash', $id, $self;
         $self->weak( $id, $item );
 	for my $key (keys %contents) {

@@ -7,7 +7,6 @@ use lib './t/lib';
 use lib './lib';
 
 use Yote::ObjectStore;
-use Yote::RecordStore::MySQL;
 
 use Data::Dumper;
 use File::Temp qw/ :mktemp tempdir /;
@@ -300,6 +299,50 @@ is( $hashcopy->{obj}, $hashcopy->{obj}->get_obj, "obj copy copy" );
 
 #$os2->close_objectstore;
 
+# -------------------------------------------------------------
+
+# test array and hash to make sure the array does not store objects
+# within it
+{
+    $record_store = $factory->new_rs;
+    $object_store = Yote::ObjectStore->open_object_store( $record_store );
+    $root = $object_store->fetch_root;
+    my ($arry,$oref);
+    {
+        my $o = $object_store->create_container( 'Tainer' );
+        $oref = "r$o";
+#        $root->set_foo($o);
+        $arry = $root->set_arry([]);
+        push @$arry, $o;
+ #       $arry = $root->set_arry( [ $o ] );
+        is ( scalar( grep {$object_store->[2]{$_}} keys %{$object_store->[2]}), 3, "3 weak refs (root, o, arry)" );
+        $object_store->save;
+    }
+print STDERR Data::Dumper->Dump([map { ref($object_store->[2]{$_}) }grep {$object_store->[2]{$_}} keys %{$object_store->[2]}]);
+    is ( scalar( grep {$object_store->[2]{$_}} keys %{$object_store->[2]}), 2, "2 weak refs (root arry)" );
+    my $atied = tied @$arry;
+    is_deeply( $atied->[1], [ $oref ], 'item stored in array as reference string' );
+}
+
+{
+    $record_store = $factory->new_rs;
+    $object_store = Yote::ObjectStore->open_object_store( $record_store );
+    $root = $object_store->fetch_root;
+    my ($arry,$oref);
+    {
+        my $o = $object_store->create_container( 'Tainer' );
+        $oref = "r$o";
+        $arry = $root->set_arry( [ $o ] );
+        is ( scalar( grep {$object_store->[2]{$_}} keys %{$object_store->[2]}), 3, "3 weak refs (root, o, arry)" );
+        $object_store->save;
+    }
+    is ( scalar( grep {$object_store->[2]{$_}} keys %{$object_store->[2]}), 2, "2 weak refs (root arry)" );
+    my $atied = tied @$arry;
+    is_deeply( $atied->[1], [ $oref ], 'item stored in array as reference string' );
+}
+
+
+
 done_testing();
 
 exit;
@@ -317,29 +360,13 @@ sub throws_ok {
 
 package Factory;
 
+use Yote::RecordStore::File;
+use File::Temp qw/ :mktemp tempdir /;
+
 sub new_db_name {
     my ( $self ) = @_;
-
-    my $args = $self->{args};
-    my $dsn = "DBI:mysql:host=$args->{host}:port=$args->{port}";
-    my $dbh = DBI->connect( $dsn, $args->{user}, $args->{password} );
-    $self->{dbh} = $dbh;
-    die "No db : $@, $!" unless $dbh;
-    my $tries = 0;
-    while ($tries < 10) {
-	my $dbn = "test_$tries";
-
-        my $rv = $dbh->do( "SHOW DATABASES LIKE '$dbn'" );
-        if ($rv == 0) {
-            $dbh->do( "CREATE DATABASE $dbn" );
-	     $self->{dbnames}{$dbn} = 1;
-	     return $dbn;
-        }
-	$tries++;
-    }
-    $@ = "gave up after $tries tries";
-    print STDERR "NOPE : $@\n";
-    return undef;
+    my $dir = tempdir( CLEANUP => 1 );
+    return $dir;
 } #new_db_name
 
 sub new {
@@ -351,28 +378,18 @@ sub new_rs {
     my ($self) = @_;
     
     # make a test db
-    $self->{args}{database} = $self->new_db_name;
-    my $store = Yote::RecordStore::MySQL->open_store( %{$self->{args}} );
+    $self->{args}{BASE_PATH} = $self->new_db_name;
+    my $store = Yote::RecordStore::File->open_store( %{$self->{args}} );
     return $store;
 }
 sub reopen {
     my( $cls, $oldstore ) = @_;
-    my $options = $oldstore->{options};
-    return Yote::RecordStore::MySQL->open_store( %$options );
+    my $dir = $oldstore->[0];
+    return Yote::RecordStore::File->open_store( $dir );
 }
 sub teardown {
     my $self = shift;
-    for my $dbn (keys %{$self->{dbnames}}) {
-	$self->{dbh}->do( "DROP DATABASE IF EXISTS $dbn" );
-    }
 }
 sub setup {
     my $self = shift;
-    my $args = $self->{args};
-    my $dsn = "DBI:mysql:host=$args->{host}:port=$args->{port}";
-    my $dbh = DBI->connect( $dsn, $args->{user}, $args->{password} );
-    for (0..10) {
-        $dbh->do( "DROP DATABASE IF EXISTS test_$_" );
-    }
-    warn "get rid of this for producgtion";
 }
