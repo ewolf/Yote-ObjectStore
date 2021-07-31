@@ -28,7 +28,9 @@ $factory->setup;
 
 my $record_store = $factory->new_rs;
 my $object_store = Yote::ObjectStore->open_object_store( $record_store );
-is ($record_store->get_record_count, 0, 'no records in store');
+$record_store->lock;
+is ($record_store->record_count, 0, 'no records in store');
+$record_store->unlock;
 
 my $r1 = $object_store->fetch_root;
 ok( $r1, 'got a root' );
@@ -48,6 +50,7 @@ is ($r2->get( 'burger' ), 'time', 'get with default called' );
 my $a1 = $r1->get_array( [ 1, 2, 3 ] );
 is_deeply ($a1, [ 1, 2, 3 ], "get array with defaults" );
 $object_store->save;
+
 #$record_store->close_recordstore;
 
 # -------------------------------------------------------------
@@ -234,9 +237,18 @@ $object_store->save;
 $object_store = Yote::ObjectStore->open_object_store( $record_store );
 is ( $object_store->fetch_root->get_tainer->nice, "YES", "a nice tainer" );
 
-is ( $record_store->get_record_count, 9, "9 records" );
-is ( $object_store->_new_id, 10, '10th id' );
-is ( $object_store->fetch( 10 ), undef, 'no object yet at 10' );
+$record_store->lock;
+$record_store->_vacuum;
+
+# check to make sure that there are only 9 active records
+
+is ( $record_store->active_entry_count, 9, "9 active records" );
+
+my $recs = $record_store->record_count;
+is ( $object_store->_new_id, $recs + 1, 'next id' );
+is ( $object_store->fetch( $recs ), undef, 'no object yet at the latest next id' );
+$record_store->unlock;
+
 #$object_store->close_objectstore;
 
 # -------------------------------------------------------------
@@ -375,7 +387,7 @@ is( $hashcopy->{obj}, $hashcopy->{obj}->get_obj, "obj copy copy" );
     $object_store->save;
 
     my $dest_store = $factory->new_rs;
-    $object_store->vacuum( $dest_store );
+    $object_store->copy_store( $dest_store );
 
     my $v_store = Yote::ObjectStore->open_object_store( $dest_store );
     my $compare = sub {
@@ -410,7 +422,7 @@ sub throws_ok {
 
 package Factory;
 
-use Yote::RecordStore::File;
+use Yote::RecordStore;
 use File::Temp qw/ :mktemp tempdir /;
 
 sub new_db_name {
@@ -429,13 +441,13 @@ sub new_rs {
     
     # make a test db
     $self->{args}{directory} = $self->new_db_name;
-    my $store = Yote::RecordStore::File->open_store( %{$self->{args}} );
+    my $store = Yote::RecordStore->open_store( $self->{args}{directory} );
     return $store;
 }
 sub reopen {
     my( $cls, $oldstore ) = @_;
     my $dir = $oldstore->[0];
-    return Yote::RecordStore::File->open_store( $dir );
+    return Yote::RecordStore->open_store( $dir );
 }
 sub teardown {
     my $self = shift;

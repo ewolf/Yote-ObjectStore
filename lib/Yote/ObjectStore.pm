@@ -11,18 +11,18 @@ no warnings 'uninitialized';
 use Yote::ObjectStore::Array;
 use Yote::ObjectStore::Container;
 use Yote::ObjectStore::Hash;
-use Yote::RecordStore::MySQL;
+use Yote::RecordStore::Silo;
 
 use Scalar::Util qw(weaken);
 use Time::HiRes qw(time);
 
 use constant {
     RECORD_STORE => 0,
-    DIRTY => 1,
-    WEAK  => 2,
-    VOL   => 3,
+    DIRTY        => 1,
+    WEAK         => 2,
+    OPTIONS      => 3,
 
-    DATA  => 1,
+    DATA => 1,
 };
 
 =head1 NAME
@@ -41,8 +41,15 @@ Yote::ObjectStore
 
 =head1 METHODS
 
-=head2 open_store( $options )
+=head2 open_object_store( %args )
 
+Options
+
+=over 4
+
+=item record_store - required. a record store
+
+=back
 
 =cut
 
@@ -53,18 +60,20 @@ sub open_object_store {
     my $record_store = $args{record_store};
     
     unless (ref $record_store) {
+        $@ = 'no record store provided to '.__PACKAGE__." open_object_store";
 	return undef;
     }
+
     my $store = bless [
         $record_store,
         {},
         {},
-        {},
+        \%args,
         ], $pkg;
     return $store;
 }
 
-=head2 open_store( $options )
+=head2 fetch_root()
 
 =cut
 
@@ -100,7 +109,7 @@ sub fetch_root {
 } #fetch_root
 
 
-=head2 open_store( $options )
+=head2 lock( @keys )
 
 
 =cut
@@ -112,7 +121,7 @@ sub lock {
 }
 
 
-=head2 open_store( $options )
+=head2 unlock()
 
 
 =cut
@@ -122,18 +131,10 @@ sub unlock {
     return shift->[RECORD_STORE]->unlock;
 }
 
-=head2 empty_vol()
+=head2 save( $obj )
 
 
-=cut
-sub empty_vol {
-    my $self = shift;
-    my $vol = $self->[VOL];
-    %$vol = ();
-}
-
-
-=head2 open_store( $options )
+=head2 save()
 
 
 =cut
@@ -141,8 +142,8 @@ sub empty_vol {
 sub save {
     my ($self,$obj) = @_;
     my $record_store = $self->[RECORD_STORE];
-#    $record_store->lock;
-    $record_store->use_transaction;
+    $record_store->lock;
+    $record_store->use_transaction unless $self->[OPTIONS]{no_transactions};
 
     my $dirty = $self->[DIRTY];
     if ($obj) {
@@ -185,13 +186,13 @@ sub save {
         }
         %$dirty = ();
     }
-    $record_store->commit_transaction;
-#    $record_store->unlock;
+    $record_store->commit_transaction unless $self->[OPTIONS]{no_transactions};
+    $record_store->unlock;
     return 1;
 } #save
 
 
-=head2 open_store( $options )
+=head2 fetch( $id )
 
 
 =cut
@@ -202,7 +203,7 @@ sub fetch {
     if (exists $self->[DIRTY]{$id}) {
         $obj = $self->[DIRTY]{$id}[0];
     } else {
-        $obj = $self->[VOL]{$id} || $self->[WEAK]{$id};
+        $obj = $self->[WEAK]{$id};
     }
 
     return $obj if $obj;
@@ -221,7 +222,7 @@ sub fetch {
 } #fetch
 
 
-=head2 open_store( $options )
+=head2 tied_obj( $obj )
 
 
 =cut
@@ -236,7 +237,7 @@ sub tied_obj {
 } #tied_obj
 
 
-=head2 open_store( $options )
+=head2 existing_id( $item )
 
 
 =cut
@@ -265,11 +266,20 @@ sub existing_id {
 
 } #existing_id
 
+# -- for testing --------
 
-=head2 open_store( $options )
+sub is_dirty {
+    my ($self,$obj) = @_;
+    my $id = $self->_id( $obj );
+    return defined( $self->[DIRTY]{$id} );
+}
+
+sub id_is_referenced {
+    my ($self,$id) = @_;
+    return defined( $self->[WEAK]{$id} );
+}
 
 
-=cut
 
 sub _id {
     my ($self, $item) = @_;
@@ -316,22 +326,6 @@ sub weak {
     $self->[WEAK]{$id} = $ref;
 
     weaken( $self->[WEAK]{$id} );
-}
-
-sub is_dirty {
-    my ($self,$obj) = @_;
-    my $id = $self->_id( $obj );
-    return defined( $self->[DIRTY]{$id} );
-}
-
-sub id_is_referenced {
-    my ($self,$id) = @_;
-    return defined( $self->[WEAK]{$id} );
-}
-
-sub register_vol {
-    my ($self,$id,$obj) = @_;
-    $self->[VOL]{$id} = $obj;
 }
 
 #
@@ -401,7 +395,11 @@ sub _reconstitute {
 
 sub _new_id {
     my $self = shift;
-    return $self->[RECORD_STORE]->next_id;
+    my $record_store = $self->[RECORD_STORE];
+    $record_store->lock;
+    my $id = $self->[RECORD_STORE]->next_id;
+    $record_store->unlock;
+    return $id;
 } #_new_id
 
 sub create_container {
@@ -434,21 +432,21 @@ sub create_container {
     return $obj;
 } #create_container
 
-sub vacuum {
+sub copy_store {
     my ($self, $destination_store) = @_;
 
     unless ($destination_store) {
         $@ = "vacuum must be called with a destination store";
         return 0;
     }
+    $destination_store->lock;
 
     my $record_store = $self->[RECORD_STORE];
     $record_store->lock;
 
-    my $silo = $record_store->open_silo( $record_store->directory . '/vacuum',
-                                         "I" );
+    my $silo = Yote::RecordStore::Silo->open_silo( $record_store->directory . '/vacuum', "I" );
     $silo->empty_silo;
-    $silo->ensure_entry_count( $record_store->entry_count );
+    $silo->ensure_entry_count( $record_store->record_count );
 
     my $mark;
     $mark = sub {
@@ -479,10 +477,11 @@ sub vacuum {
     $mark->( "r" . $record_store->first_id );
     
     $record_store->unlock;
+    $destination_store->unlock;
 
     return 1;
 
-} #vacuum
+} #copy_store
 
 "BUUG";
 
