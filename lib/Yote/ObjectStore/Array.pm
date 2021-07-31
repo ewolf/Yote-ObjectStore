@@ -42,7 +42,6 @@ sub FETCH {
 
     my $data = $self->[DATA];
     return undef if $idx >= @$data;
-
     return $self->[OBJ_STORE]->xform_out( $self->[DATA][$idx] );
     
 } #FETCH

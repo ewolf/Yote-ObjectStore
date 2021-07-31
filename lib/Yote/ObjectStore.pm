@@ -21,6 +21,8 @@ use constant {
     DIRTY => 1,
     WEAK  => 2,
     VOL   => 3,
+
+    DATA  => 1,
 };
 
 =head1 NAME
@@ -426,6 +428,56 @@ sub create_container {
 
     return $obj;
 } #create_container
+
+sub vaccuum {
+    my ($self, $destination_store) = @_;
+
+    unless ($destination_store) {
+        $@ = "vaccuum must be called with a destination store";
+        return 0;
+    }
+
+    my $record_store = $self->[RECORD_STORE];
+    $record_store->lock;
+
+    my $silo = $record_store->open_silo( $record_store->directory . '/vaccuum',
+                                         "I" );
+    $silo->empty_silo;
+    $silo->ensure_entry_count( $record_store->entry_count );
+
+    my $mark;
+    $mark = sub {
+        my $obj_id = shift;
+
+        my ($id) = ( $obj_id =~ /^r(.*)/ );
+        return unless defined $id;
+
+        if ($silo->get_record( $id )->[0] == 1) {
+            return;
+        }
+
+        $silo->put_record( $id, 1 );
+
+        my $obj = $self->tied_obj( $self->fetch( $id ) );
+        
+        $destination_store->stow( $obj->__freezedry, $id );
+
+        my $data = $obj->[DATA];
+        if (ref($data) eq 'ARRAY') {
+            map { $mark->($_) } @$data;
+        } else {
+            map { $mark->($_) } values %$data;
+        }
+    };
+
+    # finds the data that should be copied over
+    $mark->( "r" . $record_store->first_id );
+    
+    $record_store->unlock;
+
+    return 1;
+
+} #vaccuum
 
 "BUUG";
 

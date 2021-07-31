@@ -318,7 +318,7 @@ is( $hashcopy->{obj}, $hashcopy->{obj}->get_obj, "obj copy copy" );
         is ( scalar( grep {$object_store->[2]{$_}} keys %{$object_store->[2]}), 3, "3 weak refs (root, o, arry)" );
         $object_store->save;
     }
-print STDERR Data::Dumper->Dump([map { ref($object_store->[2]{$_}) }grep {$object_store->[2]{$_}} keys %{$object_store->[2]}]);
+
     is ( scalar( grep {$object_store->[2]{$_}} keys %{$object_store->[2]}), 2, "2 weak refs (root arry)" );
     my $atied = tied @$arry;
     is_deeply( $atied->[1], [ $oref ], 'item stored in array as reference string' );
@@ -341,7 +341,57 @@ print STDERR Data::Dumper->Dump([map { ref($object_store->[2]{$_}) }grep {$objec
     is_deeply( $atied->[1], [ $oref ], 'item stored in array as reference string' );
 }
 
+{
+    # test the vaccuum. set up a simple store with circular connections 
+    $record_store = $factory->new_rs;
+    $object_store = Yote::ObjectStore->open_object_store( $record_store );
+    $root = $object_store->fetch_root;
+    
+    my $c_moo = $object_store->create_container;
+    my $c_unconnect = $object_store->create_container;
+    my $c = $object_store->create_container;
+    my $a = [ $c, "NADA" ];
+    $a->[3] = $c;
+    $a->[5] = $c_moo;
+    my $h = { foo => "BAR", a => $a, c => $c };
+    $h->{h} = $h;
 
+    $c_unconnect->set_a( $a );
+    $c_unconnect->set_moo( $c_moo );
+    $c_unconnect->set_h( $h );
+
+    $root->set_c( $c );
+
+    $c->set_c( $c );
+    $c->set_a( $a );
+    $c->set_h( $h );
+    
+    my $c_moo_id = $object_store->_id( $c_moo );
+    my $c_unconnect_id = $object_store->_id( $c_unconnect );
+    my $c_id = $object_store->_id( $c );
+    my $a_id = $object_store->_id( $a );
+    my $h_id = $object_store->_id( $h );
+
+    $object_store->save;
+
+    my $dest_store = $factory->new_rs;
+    $object_store->vaccuum( $dest_store );
+
+    my $v_store = Yote::ObjectStore->open_object_store( $dest_store );
+    my $compare = sub {
+        my ($id, $obj) = @_;
+        $obj = $object_store->tied_obj( $obj );
+        my $v_obj = $v_store->tied_obj($v_store->fetch( $id ));
+        is ($obj->[0], $v_obj->[0], "compare $id id");
+        is_deeply ($obj->[1], $v_obj->[1], "compare $id contents");
+    };
+
+    is ( $v_store->fetch( $c_unconnect_id ), undef, "did not transfer unconnected object" );
+    $compare->( $h_id, $h );
+    $compare->( $a_id, $a );
+    $compare->( $c_id, $c );
+    $compare->( $c_moo_id, $c_moo );
+}
 
 done_testing();
 
