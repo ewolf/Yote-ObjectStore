@@ -205,41 +205,50 @@ sub AUTOLOAD {
 
 sub __freezedry {
     # packs into
-    #   I - length of classname
-    #   (a<length of classname>)
-    #   I - number of segments
-    #   I x number of segments - each segment length
-    #   (a<segment length>) x number of segments
+    #  I - length of package name (c)
+    #  a(c) - package name
+    #  L - object id
+    #  I - number of components (n)
+    #  I(n) lenghts of components
+    #  a(sigma n) data 
     my $self = shift;
 
     my $r = ref( $self );
-    my $cls_length = do { use bytes; length($r); };
+    my $c = length( $r );
     
-    my (@data) = %{$self->__data};
+    my $data = $self->__data;
+    my (@data) = (map { my $v = $data->{$_}; $_ => defined($v) ? $v : 'u' } keys %$data);
+    my $n = scalar( @data );
 
     my (@lengths) = map { do { use bytes; length($_) } } @data;
 
-    my $pack_template = "I(a$cls_length)I". (1+scalar(@data)) . join( "", map { "(a$_)" } @lengths );
+    my $pack_template = "I(a$c)LI(I$n)" . join( '', map { "(a$_)" } @lengths);
 
-    return pack $pack_template, $cls_length, $r, scalar(@lengths), @lengths, @data;
+    return pack $pack_template, $c, $r, $self->id, $n, @lengths, @data;
 }
 
-
 sub __reconstitute {
-    my ($pkg, $id, $data, $store, $update_time, $creation_time ) = @_;
+    my ($self, $id, $data, $store, $update_time, $creation_time ) = @_;
 
-    my $class_length = unpack "I", $data;
-    (undef, my $class) = unpack "I(a$class_length)", $data;
+    my $unpack_template = "I";
 
-    (undef, undef, my $part_count) = unpack "I(a$class_length)I", $data;
-    my $unpack_template = "I(a$class_length)I".(1+scalar($part_count));
-    (undef, undef, undef, my @sizes) = unpack $unpack_template, $data;
+    my $class_length = unpack $unpack_template, $data;
 
-    $unpack_template .= join( "", map { "(a$_)" } @sizes );
+    $unpack_template .= "(a$class_length)LI";
+    my (undef, $class, $stored_id, $n) = unpack $unpack_template, $data;
 
+    warn "id mismatch $stored_id vs expected $id" if $id != $stored_id;
+
+    $unpack_template .= "I" x $n;
+
+    my (undef, undef, undef, undef, @lengths) = unpack $unpack_template, $data;
+
+    $unpack_template .= join( '', map { "(a$_)" } @lengths );
+    
     my( @parts ) = unpack $unpack_template, $data;
 
-    splice @parts, 0, ($part_count+3);
+    # remove beginning stuff
+    splice @parts, 0, ($n+4);
 
     if( $class ne 'Yote::ObjectStore::Container' ) {
       my $clname = $class;
