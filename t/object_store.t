@@ -428,7 +428,7 @@ sub new_rs {
     my ($self) = @_;
     
     # make a test db
-    $self->{args}{BASE_PATH} = $self->new_db_name;
+    $self->{args}{directory} = $self->new_db_name;
     my $store = Yote::RecordStore::File->open_store( %{$self->{args}} );
     return $store;
 }
