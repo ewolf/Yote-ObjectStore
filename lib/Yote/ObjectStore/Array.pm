@@ -26,13 +26,13 @@ sub id {
 }
 
 sub TIEARRAY {
-    my( $pkg, $id, $store, @list ) = @_;
+    my( $pkg, $id, $store, $meta, @list ) = @_;
     
     return bless [
         $id,
         [@list],
 	$store,
-	undef,
+	$meta,
 	], $pkg;
 
 } #TIEARRAY
@@ -149,7 +149,7 @@ sub __freezedry {
 }
 
 sub __reconstitute {
-    my ($self, $id, $data, $store ) = @_;
+    my ($self, $id, $data, $store, $update_time, $creation_time ) = @_;
 
     my $class_length = unpack "I", $data;
     (undef, my $class) = unpack "I(a$class_length)", $data;
@@ -165,7 +165,8 @@ sub __reconstitute {
     splice @parts, 0, ($part_count+3);
 
     my @array;
-    tie @array, 'Yote::ObjectStore::Array', $id, $store, @parts;
+    tie @array, 'Yote::ObjectStore::Array', $id, $store, 
+        {updated => $update_time, created => $creation_time}, @parts;
     return \@array;
 }
 

@@ -342,7 +342,7 @@ is( $hashcopy->{obj}, $hashcopy->{obj}->get_obj, "obj copy copy" );
 }
 
 {
-    # test the vaccuum. set up a simple store with circular connections 
+    # test the vacuum. set up a simple store with circular connections 
     $record_store = $factory->new_rs;
     $object_store = Yote::ObjectStore->open_object_store( $record_store );
     $root = $object_store->fetch_root;
@@ -375,7 +375,7 @@ is( $hashcopy->{obj}, $hashcopy->{obj}->get_obj, "obj copy copy" );
     $object_store->save;
 
     my $dest_store = $factory->new_rs;
-    $object_store->vaccuum( $dest_store );
+    $object_store->vacuum( $dest_store );
 
     my $v_store = Yote::ObjectStore->open_object_store( $dest_store );
     my $compare = sub {

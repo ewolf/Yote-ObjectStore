@@ -9,6 +9,7 @@ use constant {
     DATA     => 1,
     STORE    => 2,
     VOLATILE => 3,
+    META     => 4,
 };
 
 #
@@ -226,7 +227,7 @@ sub __freezedry {
 
 
 sub __reconstitute {
-    my ($pkg, $id, $data, $store ) = @_;
+    my ($pkg, $id, $data, $store, $update_time, $creation_time ) = @_;
 
     my $class_length = unpack "I", $data;
     (undef, my $class) = unpack "I(a$class_length)", $data;
@@ -253,6 +254,7 @@ sub __reconstitute {
         {@parts},
         $store,
 	{},
+        {updated => $update_time, created => $creation_time},
         ], $class;
     # stuff into WEAK temporarily while LOAD happens
     $store->weak($id,$obj);

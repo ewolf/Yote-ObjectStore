@@ -210,11 +210,11 @@ sub fetch {
     my $record_store = $self->[RECORD_STORE];
     $record_store->lock;
     
-    my $record = $record_store->fetch( $id );
+    my ( $update_time, $creation_time, $record ) = $record_store->fetch( $id );
     unless (defined $record) {
         return undef;
     }
-    $obj = $self->_reconstitute( $id, $record );
+    $obj = $self->_reconstitute( $id, $record, $update_time, $creation_time );
     $self->weak( $id, $obj );
     $record_store->unlock;
     return $obj;
@@ -385,12 +385,17 @@ sub xform_out {
 } #xform_out
 
 sub _reconstitute {
-    my ($self, $id, $data ) = @_;
+    my ($self, $id, $data, $update_time, $creation_time ) = @_;
 
     my $class_length = unpack "I", $data;
     (undef, my $class) = unpack "I(a$class_length)", $data;
 
-    return $class->__reconstitute( $id, $data, $self );
+    my $clname = $class;
+    $clname =~ s/::/\//g;
+
+    require "$clname.pm";
+
+    return $class->__reconstitute( $id, $data, $self, $update_time, $creation_time );
 
 } #_reconstitute
 
@@ -429,18 +434,18 @@ sub create_container {
     return $obj;
 } #create_container
 
-sub vaccuum {
+sub vacuum {
     my ($self, $destination_store) = @_;
 
     unless ($destination_store) {
-        $@ = "vaccuum must be called with a destination store";
+        $@ = "vacuum must be called with a destination store";
         return 0;
     }
 
     my $record_store = $self->[RECORD_STORE];
     $record_store->lock;
 
-    my $silo = $record_store->open_silo( $record_store->directory . '/vaccuum',
+    my $silo = $record_store->open_silo( $record_store->directory . '/vacuum',
                                          "I" );
     $silo->empty_silo;
     $silo->ensure_entry_count( $record_store->entry_count );
@@ -477,7 +482,7 @@ sub vaccuum {
 
     return 1;
 
-} #vaccuum
+} #vacuum
 
 "BUUG";
 

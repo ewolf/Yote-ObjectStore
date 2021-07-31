@@ -10,7 +10,7 @@ use constant {
     ID         => 0,
     DATA       => 1,
     OBJ_STORE  => 2,
-    NEXT       => 3,
+    META       => 3,
 };
 
 sub _dirty {
@@ -27,11 +27,11 @@ sub id {
 }
 
 sub TIEHASH {
-    my( $pkg, $id, $store, %hash ) = @_;
+    my( $pkg, $id, $store, $meta, %hash ) = @_;
     return bless [ $id,
 		   { %hash },
 		   $store,
-		   undef,
+		   $meta,
 	], $pkg;
 } #TIEHASH
 
@@ -111,7 +111,7 @@ sub __freezedry {
 }
 
 sub __reconstitute {
-    my ($self, $id, $data, $store ) = @_;
+    my ($self, $id, $data, $store, $update_time, $creation_time ) = @_;
 
     my $class_length = unpack "I", $data;
     (undef, my $class) = unpack "I(a$class_length)", $data;
@@ -127,7 +127,7 @@ sub __reconstitute {
     splice @parts, 0, ($part_count+3);
 
     my %hash;
-    tie %hash, 'Yote::ObjectStore::Hash', $id, $store, @parts;
+    tie %hash, 'Yote::ObjectStore::Hash', $id, $store, {updated => $update_time, created => $creation_time}, @parts;
     return \%hash;
 }
 
