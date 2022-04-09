@@ -21,6 +21,7 @@ use constant {
     DIRTY        => 1,
     WEAK         => 2,
     OPTIONS      => 3,
+    WRITE_LOGGER => 4,
 
     DATA => 1,
 };
@@ -72,6 +73,7 @@ sub open_object_store {
         ], $pkg;
     return $store;
 }
+
 
 =head2 fetch_root()
 
@@ -145,6 +147,9 @@ sub save {
     $record_store->use_transaction unless $self->[OPTIONS]{no_transactions};
 
     my $dirty = $self->[DIRTY];
+
+    my $logger = $self->[WRITE_LOGGER];
+
     if ($obj) {
         # kind of dangerous to overall integrity
         # use with caution
@@ -156,11 +161,11 @@ sub save {
             $obj = tied %$obj;
         }
         my $id = $obj->id;
-        
-        $record_store->stow( $obj->__freezedry, $id );
-        # unless( defined $record_store->stow( $self->_freezedry($obj,$id), $id ) ) {
-        #     return undef;
-        # }
+
+        my $froze = $obj->__freezedry;
+
+        $logger && $logger->log( $obj->__logline );
+        $record_store->stow( $froze, $id );
         delete $dirty->{$id};
     } else {
         my @ids_to_save = keys %$dirty;
@@ -178,10 +183,8 @@ sub save {
                 $obj = tied %$obj;
             }
             my $froze = $obj->__freezedry;
+            $logger && $logger->log( $froze );
             $record_store->stow( $froze, $id );
-            #	    unless (defined $record_store->stow( $self->_freezedry($obj,$id), $id )) {
-            #		return undef;
-            #	    }
         }
         %$dirty = ();
     }
@@ -443,6 +446,7 @@ sub copy_store {
     my $record_store = $self->[RECORD_STORE];
     $record_store->lock;
 
+    # mark seen items
     my $silo = Yote::RecordStore::Silo->open_silo( $record_store->directory . '/vacuum', "I" );
     $silo->empty_silo;
     $silo->ensure_entry_count( $record_store->record_count );

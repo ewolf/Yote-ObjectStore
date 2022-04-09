@@ -89,6 +89,26 @@ sub NEXTKEY  {
     return $k;
 } #NEXTKEY
 
+sub _esc {
+    my $txt = shift;
+    $txt =~ s/"/\\"/gs;
+    qq~"$txt"~;
+}
+
+sub __logline {
+    # produces a string : $id $classname p1 p2 p3 ....
+    # where the p parts are quoted if needed 
+
+    my $self = shift;
+
+    my $data = $self->__data;    
+    my (@data) = (map { my $v = $data->{$_};
+                        $_ => $v =~ / /g ? _esc( $v ) : $v
+                      }
+                  keys %$data);
+    return join( " ", $self->id, ref( $self ), @data );
+}
+
 sub __freezedry {
     # packs into
     #  I - length of package name (c)

@@ -127,6 +127,24 @@ sub SPLICE {
 
 sub EXTEND {}
 
+sub _esc {
+    my $txt = shift;
+    $txt =~ s/"/\\"/gs;
+    qq~"$txt"~;
+}
+
+sub __logline {
+    # produces a string : $id $classname p1 p2 p3 ....
+    # where the p parts are quoted if needed 
+
+    my $self = shift;
+    
+    my (@data) = (map { $_ =~ / /s ? _esc($_) : $_ } 
+                  map { defined($_) ? $_ : 'u' } 
+                  @{$self->__data});
+    return join( " ", $self->id, ref( $self ), @data );
+}
+
 sub __freezedry {
     # packs into
     #  I - length of package name (c)
