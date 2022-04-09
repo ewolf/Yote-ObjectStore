@@ -11,6 +11,7 @@ no warnings 'uninitialized';
 use Yote::ObjectStore::Array;
 use Yote::ObjectStore::Container;
 use Yote::ObjectStore::Hash;
+use Yote::ObjectStore::HistoryLogger;
 use Yote::RecordStore::Silo;
 
 use Scalar::Util qw(weaken);
@@ -65,11 +66,14 @@ sub open_object_store {
 	return undef;
     }
 
+    my $logger = $args{logger} || ($args{logdir} && Yote::ObjectStore::HistoryLogger->new( $args{logdir} ) );
+
     my $store = bless [
         $record_store,
         {},
         {},
         \%args,
+        $logger,
         ], $pkg;
     return $store;
 }
@@ -183,7 +187,7 @@ sub save {
                 $obj = tied %$obj;
             }
             my $froze = $obj->__freezedry;
-            $logger && $logger->log( $froze );
+            $logger && $logger->log( $obj->_logline );
             $record_store->stow( $froze, $id );
         }
         %$dirty = ();

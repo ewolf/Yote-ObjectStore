@@ -4,6 +4,7 @@ use strict;
 use warnings;
 no warnings 'uninitialized';
 
+use MIME::Base64;
 use Tie::Hash;
 
 use constant {
@@ -103,7 +104,7 @@ sub __logline {
 
     my $data = $self->__data;    
     my (@data) = (map { my $v = $data->{$_};
-                        $_ => $v =~ / /g ? _esc( $v ) : $v
+                        $_ => $v =~ /[\s\n\r]/g ? '"'.MIME::Base64::encode( $v, '' ).'"' : $v
                       }
                   keys %$data);
     return join( " ", $self->id, ref( $self ), @data );
