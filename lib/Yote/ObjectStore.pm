@@ -28,6 +28,7 @@ use constant {
     WEAK         => 2,
     OPTIONS      => 3,
     LOGGER       => 4,
+    CACHE        => 5,
 
     DATA => 1,
 };
@@ -108,6 +109,7 @@ sub open_object_store {
         {},
         \%args,
         $logger,
+        {},
         ], $pkg;
     $record_store->lock;
     $store->fetch_root;
@@ -365,6 +367,42 @@ sub existing_id {
     return undef;
 
 } #existing_id
+
+
+=head1 cache(@objs)
+
+Caches the objects.
+
+=cut
+
+sub cache {
+    my ($self, @objs) = @_;
+    my $cache = $self->[CACHE];
+    for my $obj (@objs) {
+        $cache->{$obj} = $obj; # stringified obj is id
+    }
+}
+
+=head1 cache(@objs)
+
+Uncaches the objects given.
+If none given, caches all.
+
+=cut
+
+sub uncache {
+    my ($self, @objs) = @_;
+    if (@objs) {
+        my $cache = $self->[CACHE];
+        for my $obj (@objs) {
+            delete $cache->{$obj}; # stringified obj is id
+        }
+    } else {
+        $self->[CACHE] = {};
+    }
+}
+
+
 
 =head2 is_dirty(obj)
 
