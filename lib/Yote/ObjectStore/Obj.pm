@@ -258,12 +258,22 @@ sub __reconstitute {
 
 }
 
-sub vol {
+sub vol_unset {
+    my ($self, $fld) = @_;
+    delete $self->[VOL]{$fld};
+}
+
+sub vol_get {
     my ($self, $fld, $val) = @_;
-    if (defined $val) {
-        $self->{VOL}[$fld] = $val;
+    if (! defined $self->[VOL]{$fld}) {
+        $self->[VOL]{$fld} = $val;
     }
-    return $self->{VOL}[$fld];
+    return $self->[VOL]{$fld};
+}
+
+sub vol_set {
+    my ($self, $fld, $val) = @_;
+    $self->[VOL]{$fld} = $val;
 }
 
 "CONTAIN";

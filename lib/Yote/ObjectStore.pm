@@ -4,9 +4,8 @@ package Yote::ObjectStore;
 #      - Container --> Obj
 #      - move lock out of RecordStore to its own thing
 
-use v5.10;
-use strict;
-use warnings;
+use v5.14;
+
 no warnings 'uninitialized';
 
 use Yote::ObjectStore::Array;
@@ -17,6 +16,10 @@ use Yote::RecordStore::Silo;
 
 use Scalar::Util qw(weaken);
 use Time::HiRes qw(time);
+
+use vars qw($VERSION);
+
+$VERSION = '2.06';
 
 use constant {
     RECORD_STORE => 0,
@@ -123,11 +126,12 @@ sub fetch_root {
     }
 
     # directly bless this rather than call new_obj so the init can be controlled here
-    $root = bless [ $root_id,
-		    {},
-		    $self,
-		    {},
-		    {} ], 'Yote::ObjectStore::Obj';
+    $root = bless [
+        $root_id,
+        {},
+        $self,
+        {},
+        ], 'Yote::ObjectStore::Obj';
     
     # special save here, just stow it 
     $record_store->stow( $root->__freezedry, $root_id );

@@ -26,6 +26,8 @@ sub id {
     return shift->[ID];
 }
 
+sub EXTEND {}
+
 sub TIEARRAY {
     my( $pkg, $id, $store, $meta, @list ) = @_;
     
