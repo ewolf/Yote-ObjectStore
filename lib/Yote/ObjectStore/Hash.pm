@@ -16,7 +16,7 @@ use constant {
 
 sub _dirty {
     my $self = shift;
-    $self->[OBJ_STORE]->dirty( $self->[ID], $self );
+    $self->[OBJ_STORE]->_dirty( $self->[ID], $self );
 } #_dirty
 
 sub __data {
@@ -50,7 +50,7 @@ sub DELETE {
     return undef unless exists $data->{$key};
     $self->_dirty;
     my $oldval = delete $data->{$key};
-    return $self->[OBJ_STORE]->xform_out( $oldval );
+    return $self->[OBJ_STORE]->_xform_out( $oldval );
 } #DELETE
 
 
@@ -61,14 +61,14 @@ sub EXISTS {
 
 sub FETCH {
     my( $self, $key ) = @_;
-    return $self->[OBJ_STORE]->xform_out( $self->[DATA]{$key} );
+    return $self->[OBJ_STORE]->_xform_out( $self->[DATA]{$key} );
 } #FETCH
 
 sub STORE {
     my( $self, $key, $val ) = @_;
     my $data = $self->[DATA];
     my $oldval = $data->{$key};
-    my $inval = $self->[OBJ_STORE]->xform_in( $val );
+    my $inval = $self->[OBJ_STORE]->_xform_in( $val );
     ( $inval ne $oldval ) && $self->_dirty;
     $data->{$key} = $inval;
     return $val;
@@ -89,12 +89,6 @@ sub NEXTKEY  {
     my( $k, $val ) = each %$data;
     return $k;
 } #NEXTKEY
-
-sub _esc {
-    my $txt = shift;
-    $txt =~ s/"/\\"/gs;
-    qq~"$txt"~;
-}
 
 sub __logline {
     # produces a string : $id $classname p1 p2 p3 ....
@@ -124,7 +118,7 @@ sub __freezedry {
     my $c = length( $r );
     
     my $data = $self->__data;
-    my (@data) = (map { my $v = $data->{$_}; $_ => defined($v) ? $v : 'u' } keys %$data);
+    my (@data) = (map { $_ => $data->{$_} } keys %$data);
     my $n = scalar( @data );
 
     my (@lengths) = map { do { use bytes; length($_) } } @data;

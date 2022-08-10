@@ -7,12 +7,14 @@ use lib './t/lib';
 use lib './lib';
 
 use Yote::ObjectStore;
+use Yote::ObjectStore::HistoryLogger;
 
 use Data::Dumper;
 use File::Temp qw/ :mktemp tempdir /;
 use Test::More;
 
 use Tainer;
+use NotApp;
 
 
 my %args = (
@@ -27,7 +29,11 @@ $factory->setup;
 # -------------------------------------------------------------
 
 my $record_store = $factory->new_rs;
-my $object_store = Yote::ObjectStore->open_object_store( $record_store );
+my $object_store = Yote::ObjectStore->open_object_store;
+is ($object_store, undef, 'no object store without record store argument' );
+warn "maybe this should die instead";
+
+$object_store = Yote::ObjectStore->open_object_store( $record_store );
 $record_store->lock;
 is ($record_store->record_count, 0, 'no records in store');
 $record_store->unlock;
@@ -100,8 +106,8 @@ is (unshift(@$arry), 5, "unshifted nothing does nothing" );
 is (unshift(@$arry,undef), 6, "unshifted an undef onto the array" );
 is (shift ( @$arry), undef, "shifted undef thing away" );
 
-push @$arry, "DELMEAGAIN";
-is (pop(@$arry), "DELMEAGAIN", "Popped thing off" );
+push @$arry, "DELME AGAIN";
+is (pop(@$arry), "DELME AGAIN", "Popped thing off" );
 my $newa = $r1->set_newarry( [] );
 is (pop(@$newa),undef, "popped from empty array" );
 is (push(@$newa),0, "pushed nothing is still nothing" );
@@ -201,10 +207,10 @@ my $newoid;
 {
     my $newo = $r1->get_someobj;
     $newoid = "$newo";
-    ok ($object_store->id_is_referenced($newoid), "there is a weak reference to someobj" );
+    ok ($object_store->_id_is_referenced($newoid), "there is a weak reference to someobj" );
 }
 pass ('no error for $newo going out of scope');
-ok (!$object_store->id_is_referenced($newoid), "there is no longer a weak reference to someobj" );
+ok (!$object_store->_id_is_referenced($newoid), "there is no longer a weak reference to someobj" );
 
 $r1->add_to_somearry( qw( ONE ) );
 
@@ -219,6 +225,8 @@ $object_store->save;
 $r1->add_once_to_somearry( qw( FOO ONE ) );
 is_deeply( $arry, [ qw( ONE FOO ) ], "still one foo on somearray" );
 ok( !$object_store->is_dirty($arry), 'somearray not changed nor dirty' );
+ok( !$object_store->is_dirty("string"), 'strings are never dirty' );
+ok( !$object_store->is_dirty(NotApp->new), 'hash not part of store is not dirty' );
 
 $r1->add_to_somearry( qw( FOO FOO BOO FOO ) );
 is_deeply( $arry, [ qw( ONE FOO FOO FOO BOO FOO ) ], "still one on somearray" );
@@ -340,17 +348,34 @@ is( $hashcopy->{obj}, $hashcopy->{obj}->get_obj, "obj copy copy" );
     $record_store = $factory->new_rs;
     $object_store = Yote::ObjectStore->open_object_store( $record_store );
     $root = $object_store->fetch_root;
-    my ($arry,$oref);
-    {
+    my ($arry,$oref, $oid);
+
+    {  # in a block for weak refs
         my $o = $object_store->new_obj( 'Tainer' );
-        $oref = "r$o";
-        $arry = $root->set_arry( [ $o ] );
-        is ( scalar( grep {$object_store->[2]{$_}} keys %{$object_store->[2]}), 3, "3 weak refs (root, o, arry)" );
+        $oid = "$o";
+        $oref = "r$oid";
+        $arry = $root->set_arry( [ $o, {} ] );
+        is ( scalar( grep {$object_store->[2]{$_}} keys %{$object_store->[2]}), 4, "3 weak refs (root, o, arry, hash)" );
         $object_store->save;
     }
     is ( scalar( grep {$object_store->[2]{$_}} keys %{$object_store->[2]}), 2, "2 weak refs (root arry)" );
+
+    my $hash = $arry->[1];
+    my $h_id = $object_store->max_id - 1;
+
     my $atied = tied @$arry;
-    is_deeply( $atied->[1], [ $oref ], 'item stored in array as reference string' );
+    is_deeply( $atied->[1], [ $oref, "r$h_id" ], 'item stored in array as reference string' );
+
+
+    is ( $object_store->existing_id( "foo" ), undef, 'no id for text' );
+    is ( $object_store->existing_id( ["foo"] ), undef, 'no id for untied array' );
+    is ( $object_store->existing_id( {bar => "foo"} ), undef, 'no id for untied hash' );
+
+    is ( $object_store->existing_id( $arry->[0] ), $oid, 'id for obj' );
+    my $a_id = $object_store->existing_id( $arry );
+    ok ( $a_id > $oid, ' id for array' );
+    ok ( ! $object_store->existing_id( NotApp->new ), ' no id blessed non Obj obj' );
+    is ( $object_store->existing_id( $hash ), $h_id, ' id for hash' );
 }
 
 {
@@ -387,6 +412,10 @@ is( $hashcopy->{obj}, $hashcopy->{obj}->get_obj, "obj copy copy" );
     $object_store->save;
 
     my $dest_store = $factory->new_rs;
+
+    ok ( ! $object_store->copy_store(undef), 'no destination no store');
+    like ($@, qr/must be called with a destination store/, 'copy store');
+
     $object_store->copy_store( $dest_store );
 
     my $v_store = Yote::ObjectStore->open_object_store( $dest_store );
@@ -403,6 +432,154 @@ is( $hashcopy->{obj}, $hashcopy->{obj}->get_obj, "obj copy copy" );
     $compare->( $a_id, $a );
     $compare->( $c_id, $c );
     $compare->( $c_moo_id, $c_moo );
+}
+
+{
+    # test the logger
+    my $logdir = tempdir( CLEANUP => 1 );
+
+    $record_store = $factory->new_rs;
+    $object_store = Yote::ObjectStore->open_object_store( 
+        record_store => $record_store,
+        logger       => Yote::ObjectStore::HistoryLogger->new( $logdir ),
+        );
+    ok ( -e "$logdir/history.log", 'log file was created with logger arg' );
+
+    $logdir = tempdir( CLEANUP => 1 );
+
+    $object_store = Yote::ObjectStore->open_object_store( 
+        record_store => $record_store,
+        logdir       => $logdir,
+        );
+    ok ( -e "$logdir/history.log", 'log file was created with directory arg' );
+    is ( -s "$logdir/history.log", 0, 'log file starts empty' );
+
+    my $root = $object_store->fetch_root;
+
+    $root->set_question( 'Γ what is going on here?' );
+    $object_store->save;
+
+    throws_ok( sub {
+        $object_store = Yote::ObjectStore->open_object_store( 
+            record_store => $record_store,
+            logdir       => $logdir.'_NOPE',
+        ); }, qr/Error opening/, 'object store cant open with bad directory' );
+
+
+}
+
+{
+    # test no transactions
+    # test the vacuum. set up a simple store with circular connections 
+    $record_store = $factory->new_rs;
+    $object_store = Yote::ObjectStore->open_object_store( 
+        record_store => $record_store,
+        no_transactions => 1,
+        );
+    $root = $object_store->fetch_root;
+    
+    my $c_moo = $object_store->new_obj;
+    my $c_unconnect = $object_store->new_obj;
+    my $c = $object_store->new_obj;
+    my $a = [ $c, "NADA" ];
+    $a->[3] = $c;
+    $a->[5] = $c_moo;
+    my $h = { foo => "BAR", a => $a, c => $c };
+    $h->{h} = $h;
+
+    $c_unconnect->set_a( $a );
+    $c_unconnect->set_moo( $c_moo );
+    $c_unconnect->set_h( $h );
+
+    $root->set_c( $c );
+
+    $c->set_c( $c );
+    $c->set_a( $a );
+    $c->set_h( $h );
+    
+    my $c_moo_id = $object_store->_id( $c_moo );
+    my $c_unconnect_id = $object_store->_id( $c_unconnect );
+    my $c_id = $object_store->_id( $c );
+    my $a_id = $object_store->_id( $a );
+    my $h_id = $object_store->_id( $h );
+
+    $object_store->save;
+
+    my $dest_store = $factory->new_rs;
+
+    ok ( ! $object_store->copy_store(undef), 'no destination no store');
+    like ($@, qr/must be called with a destination store/, 'copy store');
+
+    $object_store->copy_store( $dest_store );
+
+    my $v_store = Yote::ObjectStore->open_object_store( 
+        record_store => $dest_store,
+        no_transactions => 1,
+        );
+
+    my $compare = sub {
+        my ($id, $obj) = @_;
+        $obj = $object_store->tied_obj( $obj );
+        my $v_obj = $v_store->tied_obj($v_store->fetch( $id ));
+        is ($obj->[0], $v_obj->[0], "compare $id id");
+        is_deeply ($obj->[1], $v_obj->[1], "compare $id contents");
+    };
+
+    is ( $v_store->fetch( $c_unconnect_id ), undef, "did not transfer unconnected object" );
+    $compare->( $h_id, $h );
+    $compare->( $a_id, $a );
+    $compare->( $c_id, $c );
+    $compare->( $c_moo_id, $c_moo );
+    
+}
+
+{
+    # test no transactions and single save
+    # test the vacuum. set up a simple store with circular connections 
+    $record_store = $factory->new_rs;
+    $object_store = Yote::ObjectStore->open_object_store( 
+        record_store => $record_store,
+        no_transactions => 1,
+        );
+    $root = $object_store->fetch_root;
+
+    my $obj = $object_store->new_obj( { foo => 'bar', zip => undef } );
+    my $arry = $root->set_arry( ['this is', { an => "object inside" }, $obj ] );
+
+    my $obj_id = $object_store->existing_id( $obj );
+    my $arry_id = $object_store->existing_id( $arry );
+    ok ($obj_id > 0, 'object id made but nothing yet saved' );
+    ok ($arry_id > 0, 'array id made but nothing yet saved' );
+    
+    #though not saved at the root, it should still be visible if looked up by id
+    $object_store->save( $obj ); 
+    
+    
+    $record_store = $factory->reopen( $record_store );
+    my $object_store_copy = Yote::ObjectStore->open_object_store( $record_store );
+    my $obj_copy = $object_store_copy->fetch( $obj_id );
+    is ($obj_copy->get_foo, 'bar', 'object was saved ok' );
+    my $arry_copy = $object_store_copy->fetch( $arry_id );
+    is ($arry_copy, undef, 'array was not saved yet' );
+
+    $object_store->save( $arry ); 
+
+    $arry_copy = $object_store_copy->fetch( $arry_id );
+    is_deeply ($arry_copy, ['this is', undef, $obj_copy ], 'array is now saved but hash is not' );
+
+    $object_store->save( $arry->[1] ); 
+
+    $arry_copy = $object_store_copy->fetch( $arry_id );
+    is_deeply ($arry_copy, ['this is', { an => 'object inside' }, $obj_copy ], 'array is now saved and hash is' );
+
+    ok( $object_store_copy ne $object_store, 'store and copy and distinct' );
+    ok( $obj_copy->store eq $object_store_copy, 'obj copy store is copy store');
+    ok( $obj->store eq $object_store, 'obj store is initial store' );
+
+    is_deeply( [sort @{$obj->fields}], [ 'foo', 'zip' ], 'object fields' );
+    is ($obj->get_foo, 'bar', 'bar field' );
+    is ($obj->get_zip, undef, 'zip field' );
+
 }
 
 done_testing();

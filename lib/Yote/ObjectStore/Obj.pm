@@ -44,41 +44,13 @@ sub __data {
 sub id {
     return shift->[ID];
 }
+
 sub store {
     return shift->[STORE];
 }
-sub lock {
-    return shift->[STORE]->lock;
-}
-sub unlock {
-    return shift->[STORE]->unlock;
-}
+
 sub fields {
     return [keys %{shift->[DATA]}];
-}
-sub clearvol {
-    my( $self, $key ) = @_;
-    delete $self->[VOLATILE]{$key};
-}
-
-sub clearvols {
-    my( $self, @keys ) = @_;
-    for my $key (@keys) {
-        delete $self->[VOLATILE]{$key};
-    }
-}
-
-sub vol {
-    my( $self, $key, $val ) = @_;
-    if( defined( $val ) ) {
-        $self->[VOLATILE]{$key} = $val;
-        $self->[STORE]->register_vol( $self->[ID], $self );
-    }
-    return $self->[VOLATILE]{$key};
-}
-
-sub vol_fields {
-    return [keys %{shift->[VOLATILE]}];
 }
 
 sub get {
@@ -86,12 +58,12 @@ sub get {
     if ((! exists $self->[DATA]{$field}) and defined($default)) {
 	return $self->set($field,$default);
     }
-    return $self->[STORE]->xform_out( $self->[DATA]{$field} );
+    return $self->[STORE]->_xform_out( $self->[DATA]{$field} );
 } #get
 
 sub set {
     my ($self,$field,$value) = @_;
-    my $inval = $self->[STORE]->xform_in($value);
+    my $inval = $self->[STORE]->_xform_in($value);
     my $dirty = $self->[DATA]{$field} ne $inval;
     $self->[DATA]{$field} = $inval;
     $dirty && $self->_dirty;
@@ -100,7 +72,7 @@ sub set {
 
 sub _dirty {
     my $self = shift;
-    $self->[STORE]->dirty( $self->[ID], $self );
+    $self->[STORE]->_dirty( $self->[ID], $self );
 }
 
 sub AUTOLOAD {
@@ -199,17 +171,11 @@ sub AUTOLOAD {
         use strict 'refs';
         goto &$AUTOLOAD;
     }
-    else {
+    elsif( $func !~ /:DESTROY$/ ) {
         die "Yote::ObjectStore::Obj::$func : unknown function '$func'.";
     }
 
 } #AUTOLOAD
-
-sub _esc {
-    my $txt = shift;
-    $txt =~ s/"/\\"/gs;
-    qq~"$txt"~;
-}
 
 sub __logline {
     # produces a string : $id $classname p1 p2 p3 ....
@@ -239,7 +205,8 @@ sub __freezedry {
     my $c = length( $r );
     
     my $data = $self->__data;
-    my (@data) = (map { my $v = $data->{$_}; $_ => defined($v) ? $v : 'u' } keys %$data);
+
+    my (@data) = (map { $_ => $data->{$_} } keys %$data);
     my $n = scalar( @data );
 
     my (@lengths) = map { do { use bytes; length($_) } } @data;
@@ -258,8 +225,6 @@ sub __reconstitute {
 
     $unpack_template .= "(a$class_length)LI";
     my (undef, $class, $stored_id, $n) = unpack $unpack_template, $data;
-
-    warn "id mismatch $stored_id vs expected $id" if $id != $stored_id;
 
     $unpack_template .= "I" x $n;
 
@@ -286,15 +251,11 @@ sub __reconstitute {
 	{},
         ], $class;
     # stuff into WEAK temporarily while LOAD happens
-    $store->weak($id,$obj);
+    $store->_weak($id,$obj);
     $obj->_load;
 
     return $obj;
 
-}
-
-
-sub DESTROY {
 }
 
 "CONTAIN";

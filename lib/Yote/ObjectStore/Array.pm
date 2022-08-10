@@ -15,7 +15,7 @@ use constant {
 
 sub _dirty {
     my $self = shift;
-    $self->[OBJ_STORE]->dirty( $self->[ID], $self );
+    $self->[OBJ_STORE]->_dirty( $self->[ID], $self );
 }
 
 sub __data {
@@ -43,7 +43,7 @@ sub FETCH {
 
     my $data = $self->[DATA];
     return undef if $idx >= @$data;
-    return $self->[OBJ_STORE]->xform_out( $self->[DATA][$idx] );
+    return $self->[OBJ_STORE]->_xform_out( $self->[DATA][$idx] );
     
 } #FETCH
 
@@ -53,7 +53,7 @@ sub FETCHSIZE {
 
 sub STORE {
     my( $self, $idx, $val ) = @_;
-    my $inval = $self->[OBJ_STORE]->xform_in( $val );
+    my $inval = $self->[OBJ_STORE]->_xform_in( $val );
     if ($inval ne $self->[DATA][$idx]) {
         $self->_dirty;
     }
@@ -78,7 +78,7 @@ sub DELETE {
     my( $self, $idx ) = @_;
     (exists $self->[DATA]->[$idx]) && $self->_dirty;
     my $val = delete $self->[DATA][$idx];
-    return $self->[OBJ_STORE]->xform_out( $val );
+    return $self->[OBJ_STORE]->_xform_out( $val );
 } #DELETE
 
 sub CLEAR {
@@ -94,20 +94,20 @@ sub PUSH {
         $self->_dirty;
     }
     my $ret =  push @$data,
-        map { $self->[OBJ_STORE]->xform_in($_) } @vals;
+        map { $self->[OBJ_STORE]->_xform_in($_) } @vals;
     return $ret;
 }
 sub POP {
     my $self = shift;
     my $item = pop @{$self->[DATA]};
     $self->_dirty;
-    return $self->[OBJ_STORE]->xform_out( $item );
+    return $self->[OBJ_STORE]->_xform_out( $item );
 }
 sub SHIFT {
     my( $self ) = @_;
     my $item = shift @{$self->[DATA]};
     $self->_dirty;
-    return $self->[OBJ_STORE]->xform_out( $item );
+    return $self->[OBJ_STORE]->_xform_out( $item );
 }
 
 sub UNSHIFT {
@@ -115,24 +115,16 @@ sub UNSHIFT {
     my $data = $self->[DATA];
     @vals && $self->_dirty;
     return unshift @$data,
-	map { $self->[OBJ_STORE]->xform_in($_) } @vals;
+	map { $self->[OBJ_STORE]->_xform_in($_) } @vals;
 }
 
 sub SPLICE {
     my( $self, $offset, $remove_length, @vals ) = @_;
     my $data = $self->[DATA];
     $self->_dirty;
-    return map { $self->[OBJ_STORE]->xform_out($_) } splice @$data, $offset, $remove_length,
-	map { $self->[OBJ_STORE]->xform_in($_) } @vals;
+    return map { $self->[OBJ_STORE]->_xform_out($_) } splice @$data, $offset, $remove_length,
+	map { $self->[OBJ_STORE]->_xform_in($_) } @vals;
 } #SPLICE
-
-sub EXTEND {}
-
-sub _esc {
-    my $txt = shift;
-    $txt =~ s/"/\\"/gs;
-    qq~"$txt"~;
-}
 
 sub __logline {
     # produces a string : $id $classname p1 p2 p3 ....
