@@ -1,7 +1,6 @@
 package Yote::ObjectStore::Caching;
 
-use strict;
-use warnings;
+use 5.14.0;
 
 use base 'Data::ObjectStore';
 

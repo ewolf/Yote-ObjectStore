@@ -1,6 +1,6 @@
 package forker;
 
-use strict;
+use 5.14.0;
 
 use Fcntl qw( :flock );
 use Time::HiRes qw(usleep);

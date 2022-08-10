@@ -1,7 +1,6 @@
 package Yote::ObjectStore::Cache;
 
-use strict;
-use warnings;
+use 5.14.0;
 
 sub new {
     my( $cls, $size ) = @_;

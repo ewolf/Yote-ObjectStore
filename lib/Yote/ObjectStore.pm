@@ -120,7 +120,7 @@ sub fetch_root {
 #    $record_store->lock;
     my $root_id = $self->[RECORD_STORE]->first_id();
 
-    my $root = $self->_fetch( $root_id, 'no_unlock' );
+    my $root = $self->_fetch( $root_id );
     if ($root) {
         return $root;
     }
@@ -139,7 +139,6 @@ sub fetch_root {
 
     $self->_weak( $root_id, $root );
     
-#    $record_store->unlock;
     return $root;
 } #fetch_root
 
@@ -201,8 +200,6 @@ sub save {
     }
     $record_store->commit_transaction unless $self->[OPTIONS]{no_transactions};
 
-#    $record_store->unlock;
-
     return 1;
 } #save
 
@@ -219,7 +216,7 @@ sub fetch {
 }
 
 sub _fetch {
-    my ($self, $id, $no_unlock) = @_;
+    my ($self, $id) = @_;
     my $obj;
     if (exists $self->[DIRTY]{$id}) {
         $obj = $self->[DIRTY]{$id}[0];
@@ -230,20 +227,14 @@ sub _fetch {
     return $obj if $obj;
     
     my $record_store = $self->[RECORD_STORE];
-#    my $locked = $record_store->is_locked;
-#    $locked || $record_store->lock;
 
     my ( $update_time, $creation_time, $record ) = $record_store->fetch( $id );
 
     unless (defined $record) {
-#        $no_unlock || $record_store->unlock;
-#        $no_unlock || $locked || $record_store->unlock;
         return undef;
     }
     $obj = $self->_reconstitute( $id, $record, $update_time, $creation_time );
     $self->_weak( $id, $obj );
-#    $record_store->unlock;
-#    $locked || $record_store->unlock;
     return $obj;
 } #fetch
 
@@ -451,9 +442,7 @@ sub _reconstitute {
 sub _new_id {
     my $self = shift;
     my $record_store = $self->[RECORD_STORE];
-#    $record_store->lock;
     my $id = $self->[RECORD_STORE]->next_id;
-#    $record_store->unlock;
     return $id;
 } #_new_id
 
@@ -470,9 +459,7 @@ Returs the highest id in the store.
 =cut
 sub max_id {
     my $rs = shift->[RECORD_STORE];
-#    $rs->lock;
     my $c = $rs->record_count;
-#    $rs->unlock;
     return $c;
 }
 
@@ -527,10 +514,8 @@ sub copy_store {
         $@ = "copy_store must be called with a destination store";
         return 0;
     }
-#    $destination_store->lock;
 
     my $record_store = $self->[RECORD_STORE];
-#    $record_store->lock;
 
     # mark seen items
     my $silo = Yote::RecordStore::Silo->open_silo( $record_store->directory . '/vacuum', "I" );
@@ -564,9 +549,6 @@ sub copy_store {
 
     # finds the data that should be copied over
     $mark->( "r" . $record_store->first_id );
-    
-#    $record_store->unlock;
-#    $destination_store->unlock;
 
     return 1;
 
