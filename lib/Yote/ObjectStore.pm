@@ -12,6 +12,7 @@ use Yote::ObjectStore::Array;
 use Yote::ObjectStore::Obj;
 use Yote::ObjectStore::Hash;
 use Yote::ObjectStore::HistoryLogger;
+use Yote::RecordStore;
 use Yote::RecordStore::Silo;
 
 use Scalar::Util qw(weaken);
@@ -38,8 +39,23 @@ Yote::ObjectStore - store and lazy load perl objects, hashes and arrays.
 =head1 SYNOPSIS
 
  use Yote::ObjectStore;
+ use Yote::RecordStoreStore;
 
- my $store = Yote::ObjectStore::open_store( '/path/to/data-directory' );
+ my $rec_store = Yote::ObjectStore::open_store( "/path/to/data" );
+
+ my $obj_store = Yote::ObjectStore::open_object_store( $rec_store );
+
+ $obj_store->lock;
+
+ my $root = $obj_store->fetch_root;
+
+ my $foo = $root->get_foo( "default-value" );
+
+ my $list = $root->set_list( [ "A", { B => "B" }, 'c' ] );
+
+ $obj_store->save;
+
+ $obj_store->unlock;
 
 =head1 DESCRIPTION
 
@@ -70,8 +86,13 @@ sub open_object_store {
     my $record_store = $args{record_store};
     
     unless (ref $record_store) {
-        warn 'no record store provided to '.__PACKAGE__." open_object_store";
-	return undef;
+        # treat record store as directory
+        if ($record_store) {
+            $record_store = Yote::RecordStore->open_store( $record_store );
+        } else {
+            warn 'no record store provided to '.__PACKAGE__." open_object_store";
+            return undef;
+        }
     }
 
     my $logger = $args{logger} || ($args{logdir} && Yote::ObjectStore::HistoryLogger->new( $args{logdir} ) );
