@@ -10,7 +10,6 @@ use constant {
     ID	     => 0,
     DATA     => 1,
     STORE    => 2,
-    VOLATILE => 3,
 };
 
 #
@@ -248,7 +247,6 @@ sub __reconstitute {
         $id,
         {@parts},
         $store,
-	{},
         ], $class;
     # stuff into WEAK temporarily while LOAD happens
     $store->_weak($id,$obj);
