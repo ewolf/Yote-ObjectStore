@@ -95,7 +95,7 @@ Locks the record store
 
 =cut
 sub lock {
-    shift->[RECORD_STORE]->lock;    
+    shift->[RECORD_STORE]->lock;
 }
 
 =head2 unlock()
@@ -121,6 +121,7 @@ sub fetch_root {
     my $root_id = $self->[RECORD_STORE]->first_id();
 
     my $root = $self->_fetch( $root_id );
+
     if ($root) {
         return $root;
     }
@@ -213,6 +214,57 @@ Returns the object with the given id.
 sub fetch {
     my ($self, $id) = @_;
     return $self->_fetch( $id );
+}
+
+sub fetch_path {
+    my ($self, $path) = @_;
+    my @path = grep { $_ ne '' } split '/', $path;
+    my $fetched = $self->fetch_root;
+    while (my $segment = shift @path) {
+        if ($segment =~ /(.*)\[(\d*)\]$/) { #list or list segment
+            my ($list_name, $idx) = ($1, $2);
+            $fetched = $fetched->get( $list_name );
+            return undef unless ref $fetched ne 'ARRAY';
+            if ($idx ne '') {
+                $fetched = $fetched->[$idx];
+            } elsif( @path ) {
+                # no id and more in path? nope!
+                return undefined;
+            } else {
+                return $fetched;
+            }
+        } else {
+            $fetched = ref($fetched) eq 'HASH' ? $fetched->{$segment} : $fetched->get($segment);
+        }
+        last unless defined $fetched;
+    }
+    return $fetched;
+}
+
+# fetch_path, but with autoviv.
+# returns undef if it cannot
+sub ensure_path {
+    my ($self, $path) = @_;
+    my @path = grep { $_ ne '' } split '/', $path;
+    my $fetched = $self->fetch_root;
+    while (my $segment = shift @path) {
+        if ($segment =~ /(.*)\[(\d*)\]$/) { #list or list segment
+            my ($list_name, $idx) = ($1, $2);
+            $fetched = $fetched->get( $list_name );
+            return undef unless ref $fetched ne 'ARRAY';
+            if ($idx ne '') {
+                $fetched = $fetched->[$idx];
+            } elsif( @path ) {
+                # no id and more in path? nope!
+                return undefined;
+            } else {
+                return $fetched;
+            }
+        } else {
+            $fetched = ref($fetched) eq 'HASH' ? $fetched->{$segment} : $fetched->get($segment);
+        }
+        last unless defined $fetched;
+    } 
 }
 
 sub _fetch {
