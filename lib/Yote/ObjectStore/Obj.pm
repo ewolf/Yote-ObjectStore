@@ -1,4 +1,4 @@
-package Yote::ObjectStore::Container;
+package Yote::ObjectStore::Obj;
 
 use strict;
 use warnings;
@@ -200,7 +200,7 @@ sub AUTOLOAD {
         goto &$AUTOLOAD;
     }
     else {
-        die "Yote::ObjectStore::Container::$func : unknown function '$func'.";
+        die "Yote::ObjectStore::Obj::$func : unknown function '$func'.";
     }
 
 } #AUTOLOAD
@@ -272,7 +272,7 @@ sub __reconstitute {
     # remove beginning stuff
     splice @parts, 0, ($n+4);
 
-    if( $class ne 'Yote::ObjectStore::Container' ) {
+    if( $class ne 'Yote::ObjectStore::Obj' ) {
       my $clname = $class;
       $clname =~ s/::/\//g;
 

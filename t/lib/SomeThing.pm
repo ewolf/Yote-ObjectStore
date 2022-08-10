@@ -1,5 +1,5 @@
 package SomeThing;
 
-use base 'Yote::ObjectStore::Container';
+use base 'Yote::ObjectStore::Obj';
 
 1;

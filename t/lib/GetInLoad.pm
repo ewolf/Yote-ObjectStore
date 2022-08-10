@@ -1,6 +1,6 @@
 package GetInLoad;
 
-use base 'Yote::ObjectStore::Container';
+use base 'Yote::ObjectStore::Obj';
 
 sub _load {
     my $self = shift;

@@ -61,7 +61,7 @@ is ($r1->get( 'burger' ), 'time', 'get with default called after reload' );
 
 is_deeply ($r1->get_array, [ 1, 2, 3 ], "get array with defaults" );
 
-my $newo = $object_store->create_container;
+my $newo = $object_store->new_obj;
 $r1->set_someobj( $newo );
 is_deeply ($r1->get_array, [ 1, 2, 3 ], "get array with defaults and a push (still)" );
 is ($r1->add_to_array( $newo, undef, { foo => "Bar`Var"} ), 6, 'six items after add to array' );
@@ -77,9 +77,9 @@ $r1 = $object_store->fetch_root;
 my $firsto = $r1->get_someobj;
 is_deeply ($r1->get_array->[5], { foo => "Bar`Var" }, "got hash from save" );
 my $arry = $r1->get_array;
-is_deeply( [splice @$arry, 1, 2, "BEEP", $object_store->create_container( { me => "first", and => [ qw( the gimmi gimmies ) ] } )], [ 2, 3 ], "splice results" );
+is_deeply( [splice @$arry, 1, 2, "BEEP", $object_store->new_obj( { me => "first", and => [ qw( the gimmi gimmies ) ] } )], [ 2, 3 ], "splice results" );
 my $obj = $arry->[2];
-is (ref $obj, 'Yote::ObjectStore::Container', "obj is correct reference" );
+is (ref $obj, 'Yote::ObjectStore::Obj', "obj is correct reference" );
 is ( $obj->get( 'me' ), 'first', 'got obj me' );
 is ( $obj->get_me, 'first', 'got obj me using get_me' );
 is_deeply( $arry, [ 1, "BEEP", $obj, $firsto, undef, { foo => "Bar`Var" } ], "array now after splice" );
@@ -228,7 +228,7 @@ is_deeply( $arry, [ qw( ONE FOO FOO BOO FOO ) ], "removed one foo" );
 $r1->remove_all_from_somearry( qw( FOO ) );
 is_deeply( $arry, [qw( ONE BOO )], "removed all foo" );
 
-$r1->set_tainer( $object_store->create_container( {}, 'Tainer' ) );
+$r1->set_tainer( $object_store->new_obj( {}, 'Tainer' ) );
 is ($r1->get_tainer->nice, "YES", "a nice tainer" );
 
 $object_store->save;
@@ -274,7 +274,7 @@ is_deeply( $arry2, [ undef, undef, undef, undef, undef, 'HITHE',  {}, {A => 1}, 
 $record_store = $factory->new_rs;
 $object_store = Yote::ObjectStore->open_object_store( $record_store );
 $root = $object_store->fetch_root;
-$root->set_fredholder( $object_store->create_container( 'GetInLoad' ));
+$root->set_fredholder( $object_store->new_obj( 'GetInLoad' ));
 $object_store->save;
 $os2 = Yote::ObjectStore->open_object_store( $record_store );
 $arry2 = $os2->fetch_root->get_fredholder->get_fred;
@@ -290,7 +290,7 @@ is_deeply( $arry2, [], 'fred did get saved' );
 $record_store = $factory->reopen( $record_store );
 $os2 = Yote::ObjectStore->open_object_store( $record_store );
 my $recur = $os2->fetch_root->get_recur({});
-my $o = $os2->create_container;
+my $o = $os2->new_obj;
 $arry = [];
 $hash = { obj => $o, arry => $arry };
 $hash->{hash} = $hash;
@@ -321,7 +321,7 @@ is( $hashcopy->{obj}, $hashcopy->{obj}->get_obj, "obj copy copy" );
     $root = $object_store->fetch_root;
     my ($arry,$oref);
     {
-        my $o = $object_store->create_container( 'Tainer' );
+        my $o = $object_store->new_obj( 'Tainer' );
         $oref = "r$o";
 #        $root->set_foo($o);
         $arry = $root->set_arry([]);
@@ -342,7 +342,7 @@ is( $hashcopy->{obj}, $hashcopy->{obj}->get_obj, "obj copy copy" );
     $root = $object_store->fetch_root;
     my ($arry,$oref);
     {
-        my $o = $object_store->create_container( 'Tainer' );
+        my $o = $object_store->new_obj( 'Tainer' );
         $oref = "r$o";
         $arry = $root->set_arry( [ $o ] );
         is ( scalar( grep {$object_store->[2]{$_}} keys %{$object_store->[2]}), 3, "3 weak refs (root, o, arry)" );
@@ -359,9 +359,9 @@ is( $hashcopy->{obj}, $hashcopy->{obj}->get_obj, "obj copy copy" );
     $object_store = Yote::ObjectStore->open_object_store( $record_store );
     $root = $object_store->fetch_root;
     
-    my $c_moo = $object_store->create_container;
-    my $c_unconnect = $object_store->create_container;
-    my $c = $object_store->create_container;
+    my $c_moo = $object_store->new_obj;
+    my $c_unconnect = $object_store->new_obj;
+    my $c = $object_store->new_obj;
     my $a = [ $c, "NADA" ];
     $a->[3] = $c;
     $a->[5] = $c_moo;

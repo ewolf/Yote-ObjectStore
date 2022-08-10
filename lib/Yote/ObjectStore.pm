@@ -9,7 +9,7 @@ use warnings;
 no warnings 'uninitialized';
 
 use Yote::ObjectStore::Array;
-use Yote::ObjectStore::Container;
+use Yote::ObjectStore::Obj;
 use Yote::ObjectStore::Hash;
 use Yote::ObjectStore::HistoryLogger;
 use Yote::RecordStore::Silo;
@@ -104,7 +104,7 @@ sub fetch_root {
 		    {},
 		    $self,
 		    {},
-		    { created => time, updated => time } ], 'Yote::ObjectStore::Container';
+		    { created => time, updated => time } ], 'Yote::ObjectStore::Obj';
     $record_store->stow( $root->__freezedry, $root_id );
 
     $self->weak( $root_id, $root );
@@ -187,7 +187,7 @@ sub save {
                 $obj = tied %$obj;
             }
             my $froze = $obj->__freezedry;
-            $logger && $logger->log( $obj->_logline );
+            $logger && $logger->log( $obj->__logline );
             $record_store->stow( $froze, $id );
         }
         %$dirty = ();
@@ -265,7 +265,7 @@ sub existing_id {
         }
 	return undef;
     }
-    elsif ($r && $item->isa( 'Yote::ObjectStore::Container' )) {
+    elsif ($r && $item->isa( 'Yote::ObjectStore::Obj' )) {
 	return $item->id;
     }
     return undef;
@@ -320,7 +320,7 @@ sub _id {
         $self->dirty( $id );
         return $id;
     }
-    elsif ($r && $item->isa( 'Yote::ObjectStore::Container' )) {
+    elsif ($r && $item->isa( 'Yote::ObjectStore::Obj' )) {
 	return $item->id;
     }
     return undef;
@@ -367,7 +367,7 @@ sub xform_in {
     }
 } #xform_in
 
-# used by Container,Array,Hash
+# used by Obj,Array,Hash
 sub xform_out {
     my ($self,$str) = @_;
     return undef unless $str;
@@ -408,15 +408,15 @@ sub _new_id {
     return $id;
 } #_new_id
 
-sub create_container {
+sub new_obj {
     my ($self, $data, $class) = @_;
     unless (ref $data) {
 	($class,$data) = ($data,$class);
     }
     $data  //= {};
-    $class //= 'Yote::ObjectStore::Container';
+    $class //= 'Yote::ObjectStore::Obj';
 
-    if( $class ne 'Yote::ObjectStore::Container' ) {
+    if( $class ne 'Yote::ObjectStore::Obj' ) {
       my $clname = $class;
       $clname =~ s/::/\//g;
 
@@ -436,7 +436,7 @@ sub create_container {
     $self->weak( $id, $obj );
 
     return $obj;
-} #create_container
+} #new_obj
 
 sub copy_store {
     my ($self, $destination_store) = @_;

@@ -9,7 +9,7 @@ use base 'Yote::App';
 sub _init {
     my $self = shift;
     $self->SUPER::_init;
-    $self->set__toggler( $self->store->create_container( 'Widget' ) );
+    $self->set__toggler( $self->store->new_obj( 'Widget' ) );
 }
 
 sub hello {
@@ -70,7 +70,7 @@ sub array_in {
 
 sub make_widget {
     my( $self, $args, $sess ) = @_;
-    my $widg = $self->store->create_container( 'Widget' );
+    my $widg = $self->store->new_obj( 'Widget' );
     $widg->set_name( $args);
     return 1, $widg;
 }
