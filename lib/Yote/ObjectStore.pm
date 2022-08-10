@@ -80,9 +80,9 @@ sub open_object_store {
         \%args,
         $logger,
         ], $pkg;
-
+    $record_store->lock;
     $store->fetch_root;
-
+    $record_store->unlock;
     return $store;
 }
 

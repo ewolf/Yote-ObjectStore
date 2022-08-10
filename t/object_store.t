@@ -36,6 +36,7 @@ is ($object_store, undef, 'no object store without record store argument' );
 warn "maybe this should die instead";
 
 $object_store = Yote::ObjectStore->open_object_store( $record_store );
+$object_store->lock;
 is ($record_store->record_count, 1, 'just root record in store');
 
 my $r1 = $object_store->fetch_root;
@@ -56,12 +57,13 @@ is ($r2->get( 'burger' ), 'time', 'get with default called' );
 my $a1 = $r1->get_array( [ 1, 2, 3 ] );
 is_deeply ($a1, [ 1, 2, 3 ], "get array with defaults" );
 $object_store->save;
-
+$object_store->unlock;
 #$record_store->close_recordstore;
 
 # -------------------------------------------------------------
 
 $object_store = Yote::ObjectStore->open_object_store( $record_store );
+$object_store->lock;
 $r1 = $object_store->fetch_root;
 is ($r1->get( 'burger' ), 'time', 'get with default called after reload' );
 
@@ -75,10 +77,12 @@ is ($r1->add_to_array( $newo, undef, { foo => "Bar`Var"} ), 6, 'six items after 
 is_deeply ($r1->get_array, [ 1, 2, 3, $newo, undef, { foo => "Bar`Var" } ], "get array with defaults and a push" );
 
 $object_store->save;
+$object_store->unlock;
 
 # -------------------------------------------------------------
 
 $object_store = Yote::ObjectStore->open_object_store( $record_store );
+$object_store->lock;
 $r1 = $object_store->fetch_root;
 my $firsto = $r1->get_someobj;
 is_deeply ($r1->get_array->[5], { foo => "Bar`Var" }, "got hash from save" );
@@ -160,11 +164,12 @@ is_deeply( [sort @keyvals], ['boo -> 123','foo -> Bar`Var'], "got foreach stuff"
 
 %$hash = ();
 is_deeply( $hash, {}, "hash after clear" );
-
+$object_store->unlock;
 
 # -------------------------------------------------------------
 
 $object_store = Yote::ObjectStore->open_object_store( $record_store );
+$object_store->lock;
 $r1 = $object_store->fetch_root;
 $hash = $r1->get_array->[4];
 is_deeply( $hash, { foo => "Bar`Var" }, "simple hash reloaded" );
@@ -186,9 +191,11 @@ ok( !$object_store->is_dirty($hash), 'hash not dirty after clear but was empty' 
 
 $hash->{foo} = "BAR`Bar`BZZ";
 $object_store->save;
+$object_store->unlock;
 
 # -------------------------------------------------------------
 $object_store = Yote::ObjectStore->open_object_store( $record_store );
+$object_store->lock;
 $r1 = $object_store->fetch_root;
 $hash = $r1->get_array->[4];
 
@@ -240,9 +247,11 @@ $r1->set_tainer( $object_store->new_obj( {}, 'Tainer' ) );
 is ($r1->get_tainer->nice, "YES", "a nice tainer" );
 
 $object_store->save;
+$object_store->unlock;
 
 # -------------------------------------------------------------
 $object_store = Yote::ObjectStore->open_object_store( $record_store );
+$object_store->lock;
 is ( $object_store->fetch_root->get_tainer->nice, "YES", "a nice tainer" );
 
 $record_store->_vacuum;
@@ -256,33 +265,41 @@ is ( $object_store->_new_id, $recs + 1, 'next id' );
 is ( $object_store->fetch( $recs ), undef, 'no object yet at the latest next id' );
 
 #$object_store->close_objectstore;
+$object_store->unlock;
 
 # -------------------------------------------------------------
 
 $record_store = $factory->new_rs;
 $object_store = Yote::ObjectStore->open_object_store( $record_store );
+$object_store->lock;
 my $root = $object_store->fetch_root;
 my $arr = $root->get_arry([]);
 $arr->[5] = "HITHE";
 push @$arr, {}, {A => 1}, undef, 'C', [];
 is_deeply( $arr, [ undef, undef, undef, undef, undef, 'HITHE', {}, {A => 1}, undef, 'C', [] ], 'arry got filled with stuff' );
 $object_store->save;
+$object_store->unlock;
 #$object_store->close_objectstore;
 
 my $os2 = Yote::ObjectStore->open_object_store( $record_store );
+$object_store->lock;
 my $arry2 = $os2->fetch_root->get_arry;
 is_deeply( $arry2, [ undef, undef, undef, undef, undef, 'HITHE',  {}, {A => 1}, undef, 'C', [] ], 'arry repopened filled with stuff' );
-
+$object_store->unlock;
 #$os2->close_objectstore;
 
 # -------------------------------------------------------------
 
 $record_store = $factory->new_rs;
 $object_store = Yote::ObjectStore->open_object_store( $record_store );
+$object_store->lock;
 $root = $object_store->fetch_root;
 $root->set_fredholder( $object_store->new_obj( 'GetInLoad' ));
 $object_store->save;
+$object_store->unlock;
+
 $os2 = Yote::ObjectStore->open_object_store( $record_store );
+$os2->lock;
 $arry2 = $os2->fetch_root->get_fredholder->get_fred;
 
 # this will fail explosivly if dirty is not handled properly
@@ -297,6 +314,7 @@ $record_store->unlock;
 $record_store = $factory->reopen( $record_store );
 $record_store->lock;
 $os2 = Yote::ObjectStore->open_object_store( $record_store );
+$os2->lock;
 my $recur = $os2->fetch_root->get_recur({});
 my $o = $os2->new_obj;
 $arry = [];
@@ -308,16 +326,17 @@ $o->set_arry( $arry );
 $o->set_obj( $o );
 $recur->{recur} = $arry;
 $os2->save;
-#$record_store->unlock;
+$record_store->unlock;
 #$os2->close_objectstore;
 
 $os2 = Yote::ObjectStore->open_object_store( $record_store );
+$os2->lock;
 $arry = $os2->fetch_root->get_recur->{recur};
 my( $acopy, $hashcopy, $ocopy ) = @$arry;
 is( $arry, $acopy, "array copy copy" );
 is( $hashcopy, $hashcopy->{hash}, "hash copy copy" );
 is( $hashcopy->{obj}, $hashcopy->{obj}->get_obj, "obj copy copy" );
-
+$os2->unlock;
 #$os2->close_objectstore;
 
 # -------------------------------------------------------------
@@ -327,6 +346,7 @@ is( $hashcopy->{obj}, $hashcopy->{obj}->get_obj, "obj copy copy" );
 {
     $record_store = $factory->new_rs;
     $object_store = Yote::ObjectStore->open_object_store( $record_store );
+    $object_store->lock;
     $root = $object_store->fetch_root;
     my ($arry,$oref);
     {
@@ -348,6 +368,7 @@ is( $hashcopy->{obj}, $hashcopy->{obj}->get_obj, "obj copy copy" );
 {
     $record_store = $factory->new_rs;
     $object_store = Yote::ObjectStore->open_object_store( $record_store );
+    $object_store->lock;
     $root = $object_store->fetch_root;
     my ($arry,$oref, $oid);
 
@@ -383,6 +404,7 @@ is( $hashcopy->{obj}, $hashcopy->{obj}->get_obj, "obj copy copy" );
     # test the vacuum. set up a simple store with circular connections 
     $record_store = $factory->new_rs;
     $object_store = Yote::ObjectStore->open_object_store( $record_store );
+    $object_store->lock;
     $root = $object_store->fetch_root;
     
     my $c_moo = $object_store->new_obj;
@@ -420,6 +442,7 @@ is( $hashcopy->{obj}, $hashcopy->{obj}->get_obj, "obj copy copy" );
     $object_store->copy_store( $dest_store );
 
     my $v_store = Yote::ObjectStore->open_object_store( $dest_store );
+    $v_store->lock;
     my $compare = sub {
         my ($id, $obj) = @_;
         $obj = $object_store->tied_obj( $obj );
@@ -452,6 +475,7 @@ is( $hashcopy->{obj}, $hashcopy->{obj}->get_obj, "obj copy copy" );
         record_store => $record_store,
         logdir       => $logdir,
         );
+    $object_store->lock;
     ok ( -e "$logdir/history.log", 'log file was created with directory arg' );
     is ( -s "$logdir/history.log", 0, 'log file starts empty' );
 
@@ -459,6 +483,7 @@ is( $hashcopy->{obj}, $hashcopy->{obj}->get_obj, "obj copy copy" );
 
     $root->set_question( 'Γ what is going on here?' );
     $object_store->save;
+    $object_store->unlock;
 
     throws_ok( sub {
         $object_store = Yote::ObjectStore->open_object_store( 
@@ -477,6 +502,7 @@ is( $hashcopy->{obj}, $hashcopy->{obj}->get_obj, "obj copy copy" );
         record_store => $record_store,
         no_transactions => 1,
         );
+    $object_store->lock;
     $root = $object_store->fetch_root;
     
     my $c_moo = $object_store->new_obj;
@@ -526,6 +552,7 @@ is( $hashcopy->{obj}, $hashcopy->{obj}->get_obj, "obj copy copy" );
         is_deeply ($obj->[1], $v_obj->[1], "compare $id contents");
     };
 
+    $v_store->lock;
     is ( $v_store->fetch( $c_unconnect_id ), undef, "did not transfer unconnected object" );
     $compare->( $h_id, $h );
     $compare->( $a_id, $a );
@@ -542,6 +569,7 @@ is( $hashcopy->{obj}, $hashcopy->{obj}->get_obj, "obj copy copy" );
         record_store => $record_store,
         no_transactions => 1,
         );
+    $object_store->lock;
     $root = $object_store->fetch_root;
 
     my $obj = $object_store->new_obj( { foo => 'bar', zip => undef } );
@@ -561,6 +589,7 @@ is( $hashcopy->{obj}, $hashcopy->{obj}->get_obj, "obj copy copy" );
     $record_store->lock;
 
     my $object_store_copy = Yote::ObjectStore->open_object_store( $record_store );
+    $object_store_copy->lock;
     my $obj_copy = $object_store_copy->fetch( $obj_id );
     is ($obj_copy->get_foo, 'bar', 'object was saved ok' );
     my $arry_copy = $object_store_copy->fetch( $arry_id );
