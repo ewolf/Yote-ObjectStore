@@ -63,6 +63,11 @@ Yote::ObjectStore
 
 =head1 METHODS
 
+=head2 open_object_store( $directory )
+
+If just given a string, it is assumed to be a directory and
+a Yote::RecordStore is loaded from that directory.
+
 =head2 open_object_store( %args )
 
 Options
