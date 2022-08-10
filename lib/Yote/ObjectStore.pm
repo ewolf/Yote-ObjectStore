@@ -229,7 +229,7 @@ sub fetch_path {
                 $fetched = $fetched->[$idx];
             } elsif( @path ) {
                 # no id and more in path? nope!
-                return undefined;
+                return undef;
             } else {
                 return $fetched;
             }
@@ -256,7 +256,7 @@ sub ensure_path {
                 $fetched = $fetched->[$idx];
             } elsif( @path ) {
                 # no id and more in path? nope!
-                return undefined;
+                return undef;
             } else {
                 return $fetched;
             }

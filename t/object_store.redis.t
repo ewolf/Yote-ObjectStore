@@ -1,11 +1,13 @@
 #!/usr/bin/perl
-use strict;
+use 5.16.0;
 use warnings;
 no warnings 'uninitialized';
 
 use lib './t/lib';
 use lib './lib';
 
+use Redis;
+use Yote::Locker;
 use Yote::ObjectStore;
 use Yote::ObjectStore::HistoryLogger;
 
@@ -37,7 +39,7 @@ warn "maybe this should die instead";
 
 $object_store = Yote::ObjectStore->open_object_store( $record_store );
 $object_store->lock;
-is ($record_store->record_count, 1, 'just root record in store');
+is ($record_store->record_count, 1, 'just root in store');
 
 my $r1 = $object_store->fetch_root;
 ok( $r1, 'got a root' );
@@ -106,7 +108,10 @@ is_deeply( $arry, [ 1, "BEEP", $obj, $firsto, undef, { foo => "Bar`Var" } ], "ar
 
 is (shift (@$arry), 1, "shifted the first thing away" );
 is (scalar(@$arry), 5, '5 items in the array after shift' );
-is (unshift(@$arry), 5, "unshifted nothing does nothing" );
+{
+    no warnings 'syntax';
+    is (unshift(@$arry), 5, "unshifted nothing does nothing" );
+}
 is (unshift(@$arry,undef), 6, "unshifted an undef onto the array" );
 is (shift ( @$arry), undef, "shifted undef thing away" );
 
@@ -114,7 +119,10 @@ push @$arry, "DELME AGAIN";
 is (pop(@$arry), "DELME AGAIN", "Popped thing off" );
 my $newa = $r1->set_newarry( [] );
 is (pop(@$newa),undef, "popped from empty array" );
-is (push(@$newa),0, "pushed nothing is still nothing" );
+{
+    no warnings 'syntax';
+    is (push(@$newa),0, "pushed nothing is still nothing" );
+}
 is_deeply( $newa, [], "nothing in new array yet" );
 ok (!exists $newa->[12], 'index 12 has nothing in new array' );
 is (delete $newa->[12], undef, 'nothing to delete at index 12' );
@@ -254,15 +262,16 @@ $object_store = Yote::ObjectStore->open_object_store( $record_store );
 $object_store->lock;
 is ( $object_store->fetch_root->get_tainer->nice, "YES", "a nice tainer" );
 
-$record_store->_vacuum;
+#$record_store->_vacuum;
 
 # check to make sure that there are only 9 active records
 
-is ( $record_store->active_entry_count, 9, "9 active records" );
+#is ( $record_store->active_entry_count, 9, "9 active records" );
 
 my $recs = $record_store->record_count;
-is ( $object_store->_new_id, $recs + 1, 'next id' );
-is ( $object_store->fetch( $recs ), undef, 'no object yet at the latest next id' );
+my $new_id = $object_store->_new_id;
+is ( $new_id, $recs + 1, 'next id' );
+is ( $object_store->fetch( $new_id ), undef, 'no object yet at the latest next id' );
 
 #$object_store->close_objectstore;
 $object_store->unlock;
@@ -383,7 +392,7 @@ $os2->unlock;
     is ( scalar( grep {$object_store->[2]{$_}} keys %{$object_store->[2]}), 2, "2 weak refs (root arry)" );
 
     my $hash = $arry->[1];
-    my $h_id = $object_store->max_id - 1;
+    my $h_id = $object_store->max_id;
 
     my $atied = tied @$arry;
     is_deeply( $atied->[1], [ $oref, "r$h_id" ], 'item stored in array as reference string' );
@@ -398,64 +407,6 @@ $os2->unlock;
     ok ( $a_id > $oid, ' id for array' );
     ok ( ! $object_store->existing_id( NotApp->new ), ' no id blessed non Obj obj' );
     is ( $object_store->existing_id( $hash ), $h_id, ' id for hash' );
-}
-
-{
-    # test the vacuum. set up a simple store with circular connections 
-    $record_store = $factory->new_rs;
-    $object_store = Yote::ObjectStore->open_object_store( $record_store );
-    $object_store->lock;
-    $root = $object_store->fetch_root;
-    
-    my $c_moo = $object_store->new_obj;
-    my $c_unconnect = $object_store->new_obj;
-    my $c = $object_store->new_obj;
-    my $a = [ $c, "NADA" ];
-    $a->[3] = $c;
-    $a->[5] = $c_moo;
-    my $h = { foo => "BAR", a => $a, c => $c };
-    $h->{h} = $h;
-
-    $c_unconnect->set_a( $a );
-    $c_unconnect->set_moo( $c_moo );
-    $c_unconnect->set_h( $h );
-
-    $root->set_c( $c );
-
-    $c->set_c( $c );
-    $c->set_a( $a );
-    $c->set_h( $h );
-    
-    my $c_moo_id = $object_store->id( $c_moo );
-    my $c_unconnect_id = $object_store->id( $c_unconnect );
-    my $c_id = $object_store->id( $c );
-    my $a_id = $object_store->id( $a );
-    my $h_id = $object_store->id( $h );
-
-    $object_store->save;
-
-    my $dest_store = $factory->new_rs;
-
-    ok ( ! $object_store->copy_store(undef), 'no destination no store');
-    like ($@, qr/must be called with a destination store/, 'copy store');
-
-    $object_store->copy_store( $dest_store );
-
-    my $v_store = Yote::ObjectStore->open_object_store( $dest_store );
-    $v_store->lock;
-    my $compare = sub {
-        my ($id, $obj) = @_;
-        $obj = $object_store->tied_obj( $obj );
-        my $v_obj = $v_store->tied_obj($v_store->fetch( $id ));
-        is ($obj->[0], $v_obj->[0], "compare $id id");
-        is_deeply ($obj->[1], $v_obj->[1], "compare $id contents");
-    };
-
-    is ( $v_store->fetch( $c_unconnect_id ), undef, "did not transfer unconnected object" );
-    $compare->( $h_id, $h );
-    $compare->( $a_id, $a );
-    $compare->( $c_id, $c );
-    $compare->( $c_moo_id, $c_moo );
 }
 
 {
@@ -494,72 +445,6 @@ $os2->unlock;
 
 }
 
-{
-    # test no transactions
-    # test the vacuum. set up a simple store with circular connections 
-    $record_store = $factory->new_rs;
-    $object_store = Yote::ObjectStore->open_object_store( 
-        record_store => $record_store,
-        no_transactions => 1,
-        );
-    $object_store->lock;
-    $root = $object_store->fetch_root;
-    
-    my $c_moo = $object_store->new_obj;
-    my $c_unconnect = $object_store->new_obj;
-    my $c = $object_store->new_obj;
-    my $a = [ $c, "NADA" ];
-    $a->[3] = $c;
-    $a->[5] = $c_moo;
-    my $h = { foo => "BAR", a => $a, c => $c };
-    $h->{h} = $h;
-
-    $c_unconnect->set_a( $a );
-    $c_unconnect->set_moo( $c_moo );
-    $c_unconnect->set_h( $h );
-
-    $root->set_c( $c );
-
-    $c->set_c( $c );
-    $c->set_a( $a );
-    $c->set_h( $h );
-    
-    my $c_moo_id = $object_store->id( $c_moo );
-    my $c_unconnect_id = $object_store->id( $c_unconnect );
-    my $c_id = $object_store->id( $c );
-    my $a_id = $object_store->id( $a );
-    my $h_id = $object_store->id( $h );
-
-    $object_store->save;
-
-    my $dest_store = $factory->new_rs;
-
-    ok ( ! $object_store->copy_store(undef), 'no destination no store');
-    like ($@, qr/must be called with a destination store/, 'copy store');
-
-    $object_store->copy_store( $dest_store );
-
-    my $v_store = Yote::ObjectStore->open_object_store( 
-        record_store => $dest_store,
-        no_transactions => 1,
-        );
-
-    my $compare = sub {
-        my ($id, $obj) = @_;
-        $obj = $object_store->tied_obj( $obj );
-        my $v_obj = $v_store->tied_obj($v_store->fetch( $id ));
-        is ($obj->[0], $v_obj->[0], "compare $id id");
-        is_deeply ($obj->[1], $v_obj->[1], "compare $id contents");
-    };
-
-    $v_store->lock;
-    is ( $v_store->fetch( $c_unconnect_id ), undef, "did not transfer unconnected object" );
-    $compare->( $h_id, $h );
-    $compare->( $a_id, $a );
-    $compare->( $c_id, $c );
-    $compare->( $c_moo_id, $c_moo );
-    
-}
 
 {
     # test no transactions and single save
@@ -626,7 +511,7 @@ $os2->unlock;
     ok ($object_store->unlock, 'store unlocked');
 
 }
-
+$factory->teardown;
 done_testing();
 
 exit;
@@ -644,8 +529,7 @@ sub throws_ok {
 
 package Factory;
 
-use Yote::Locker;
-use Yote::RecordStore;
+use Yote::RecordStore::Redis;
 use File::Temp qw/ :mktemp tempdir /;
 
 sub new_db_name {
@@ -663,20 +547,36 @@ sub new_rs {
     my ($self) = @_;
     
     # make a test db
-    my $dir = $self->{args}{directory} = $self->new_db_name;
-    my $locker = Yote::Locker->new( "$dir/LOCK" );
-    my $store = Yote::RecordStore->open_store( $dir, locker => $locker );
+    my $name = $self->new_db_name;
+    $self->{lastname} = $name;
+    my $locker = Yote::Locker->new( "$name/LOCK" );
+    push @{$self->{db_names}}, $name;
+    my $store = Yote::RecordStore::Redis->open_store( name => $name, 
+                                                      locker => $locker );
     $store->lock;
     return $store;
 }
 sub reopen {
-    my( $cls, $oldstore ) = @_;
-    my $dir = $oldstore->[0];
-    my $locker = Yote::Locker->new( "$dir/LOCK" );
-    return Yote::RecordStore->open_store( $dir, locker => $locker );
+    my( $self, $oldstore ) = @_;
+    my $name = $oldstore->[$oldstore->NAME];
+    $self->{lastname} = $name;
+    my $locker = Yote::Locker->new( "$name/LOCK" );
+    my $store = Yote::RecordStore::Redis->open_store( name => $name, 
+                                                      locker => $locker );
 }
 sub teardown {
     my $self = shift;
+    # delete temporary redis stores
+
+    my $name = $self->{lastname};
+    my $locker = Yote::Locker->new( "$name/LOCK" );
+    my $redis = Yote::RecordStore::Redis->open_store( name => $name, locker => $locker )->[Yote::RecordStore::Redis->REDIS];
+    for my $name (@{$self->{db_names}}) {
+        my @keys = $redis->keys( "$name:*" );
+        if (@keys) {
+            $redis->del( @keys );
+        }
+    }
 }
 sub setup {
     my $self = shift;
