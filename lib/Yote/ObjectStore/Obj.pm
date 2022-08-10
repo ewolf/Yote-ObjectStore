@@ -10,6 +10,7 @@ use constant {
     ID	     => 0,
     DATA     => 1,
     STORE    => 2,
+    VOL      => 3,
 };
 
 #
@@ -247,6 +248,7 @@ sub __reconstitute {
         $id,
         {@parts},
         $store,
+        {}
         ], $class;
     # stuff into WEAK temporarily while LOAD happens
     $store->_weak($id,$obj);
@@ -254,6 +256,14 @@ sub __reconstitute {
 
     return $obj;
 
+}
+
+sub vol {
+    my ($self, $fld, $val) = @_;
+    if (defined $val) {
+        $self->{VOL}[$fld] = $val;
+    }
+    return $self->{VOL}[$fld];
 }
 
 "CONTAIN";

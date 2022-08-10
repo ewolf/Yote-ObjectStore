@@ -34,7 +34,7 @@ sub open_store {
 sub uncache {
     my ($self, $obj) = @_;
     
-    return delete $self->[CACHE]->{$self->_id($obj)};
+    return delete $self->[CACHE]->{$self->id($obj)};
 }
 
 sub fetch {

@@ -29,14 +29,14 @@ $factory->setup;
 # -------------------------------------------------------------
 
 my $record_store = $factory->new_rs;
+is ($record_store->record_count, 0, 'no records in store');
+
 my $object_store = Yote::ObjectStore->open_object_store;
 is ($object_store, undef, 'no object store without record store argument' );
 warn "maybe this should die instead";
 
 $object_store = Yote::ObjectStore->open_object_store( $record_store );
-$record_store->lock;
-is ($record_store->record_count, 0, 'no records in store');
-$record_store->unlock;
+is ($record_store->record_count, 1, 'just root record in store');
 
 my $r1 = $object_store->fetch_root;
 ok( $r1, 'got a root' );
@@ -245,7 +245,6 @@ $object_store->save;
 $object_store = Yote::ObjectStore->open_object_store( $record_store );
 is ( $object_store->fetch_root->get_tainer->nice, "YES", "a nice tainer" );
 
-$record_store->lock;
 $record_store->_vacuum;
 
 # check to make sure that there are only 9 active records
@@ -255,7 +254,6 @@ is ( $record_store->active_entry_count, 9, "9 active records" );
 my $recs = $record_store->record_count;
 is ( $object_store->_new_id, $recs + 1, 'next id' );
 is ( $object_store->fetch( $recs ), undef, 'no object yet at the latest next id' );
-$record_store->unlock;
 
 #$object_store->close_objectstore;
 
@@ -291,11 +289,13 @@ $arry2 = $os2->fetch_root->get_fredholder->get_fred;
 $os2->save;
 
 is_deeply( $arry2, [], 'fred did get saved' );
+$record_store->unlock;
 #$os2->close_objectstore;
 
 # -------------------------------------------------------------
 
 $record_store = $factory->reopen( $record_store );
+$record_store->lock;
 $os2 = Yote::ObjectStore->open_object_store( $record_store );
 my $recur = $os2->fetch_root->get_recur({});
 my $o = $os2->new_obj;
@@ -308,6 +308,7 @@ $o->set_arry( $arry );
 $o->set_obj( $o );
 $recur->{recur} = $arry;
 $os2->save;
+#$record_store->unlock;
 #$os2->close_objectstore;
 
 $os2 = Yote::ObjectStore->open_object_store( $record_store );
@@ -403,11 +404,11 @@ is( $hashcopy->{obj}, $hashcopy->{obj}->get_obj, "obj copy copy" );
     $c->set_a( $a );
     $c->set_h( $h );
     
-    my $c_moo_id = $object_store->_id( $c_moo );
-    my $c_unconnect_id = $object_store->_id( $c_unconnect );
-    my $c_id = $object_store->_id( $c );
-    my $a_id = $object_store->_id( $a );
-    my $h_id = $object_store->_id( $h );
+    my $c_moo_id = $object_store->id( $c_moo );
+    my $c_unconnect_id = $object_store->id( $c_unconnect );
+    my $c_id = $object_store->id( $c );
+    my $a_id = $object_store->id( $a );
+    my $h_id = $object_store->id( $h );
 
     $object_store->save;
 
@@ -497,11 +498,11 @@ is( $hashcopy->{obj}, $hashcopy->{obj}->get_obj, "obj copy copy" );
     $c->set_a( $a );
     $c->set_h( $h );
     
-    my $c_moo_id = $object_store->_id( $c_moo );
-    my $c_unconnect_id = $object_store->_id( $c_unconnect );
-    my $c_id = $object_store->_id( $c );
-    my $a_id = $object_store->_id( $a );
-    my $h_id = $object_store->_id( $h );
+    my $c_moo_id = $object_store->id( $c_moo );
+    my $c_unconnect_id = $object_store->id( $c_unconnect );
+    my $c_id = $object_store->id( $c );
+    my $a_id = $object_store->id( $a );
+    my $h_id = $object_store->id( $h );
 
     $object_store->save;
 
@@ -554,21 +555,33 @@ is( $hashcopy->{obj}, $hashcopy->{obj}->get_obj, "obj copy copy" );
     #though not saved at the root, it should still be visible if looked up by id
     $object_store->save( $obj ); 
     
-    
+    $record_store->unlock;
+    my $copied_record_store = $record_store;
     $record_store = $factory->reopen( $record_store );
+    $record_store->lock;
+
     my $object_store_copy = Yote::ObjectStore->open_object_store( $record_store );
     my $obj_copy = $object_store_copy->fetch( $obj_id );
     is ($obj_copy->get_foo, 'bar', 'object was saved ok' );
     my $arry_copy = $object_store_copy->fetch( $arry_id );
     is ($arry_copy, undef, 'array was not saved yet' );
 
-    $object_store->save( $arry ); 
+    $record_store->unlock;
 
+    $copied_record_store->lock;
+    $object_store->save( $arry );
+    $copied_record_store->unlock;
+
+    $record_store->lock;
     $arry_copy = $object_store_copy->fetch( $arry_id );
     is_deeply ($arry_copy, ['this is', undef, $obj_copy ], 'array is now saved but hash is not' );
+    $record_store->unlock;
 
+    $copied_record_store->lock;
     $object_store->save( $arry->[1] ); 
+    $copied_record_store->unlock;
 
+    $record_store->lock;
     $arry_copy = $object_store_copy->fetch( $arry_id );
     is_deeply ($arry_copy, ['this is', { an => 'object inside' }, $obj_copy ], 'array is now saved and hash is' );
 
@@ -579,6 +592,7 @@ is( $hashcopy->{obj}, $hashcopy->{obj}->get_obj, "obj copy copy" );
     is_deeply( [sort @{$obj->fields}], [ 'foo', 'zip' ], 'object fields' );
     is ($obj->get_foo, 'bar', 'bar field' );
     is ($obj->get_zip, undef, 'zip field' );
+    ok ($object_store_copy->unlock, 'copy store unlocked');
     ok ($object_store->lock, 'store locked');
     ok ($object_store->unlock, 'store unlocked');
 
@@ -621,6 +635,7 @@ sub new_rs {
     # make a test db
     $self->{args}{directory} = $self->new_db_name;
     my $store = Yote::RecordStore->open_store( $self->{args}{directory} );
+    $store->lock;
     return $store;
 }
 sub reopen {

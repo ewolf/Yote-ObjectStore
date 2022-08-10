@@ -80,6 +80,9 @@ sub open_object_store {
         \%args,
         $logger,
         ], $pkg;
+
+    $store->fetch_root;
+
     return $store;
 }
 
@@ -111,7 +114,7 @@ sub fetch_root {
     my $self = shift;
     my $record_store = $self->[RECORD_STORE];
 
-    $record_store->lock;
+#    $record_store->lock;
     my $root_id = $self->[RECORD_STORE]->first_id();
 
     my $root = $self->_fetch( $root_id, 'no_unlock' );
@@ -124,7 +127,7 @@ sub fetch_root {
 		    {},
 		    $self,
 		    {},
-		    { created => time, updated => time } ], 'Yote::ObjectStore::Obj';
+		    {} ], 'Yote::ObjectStore::Obj';
     
     # special save here, just stow it 
     $record_store->stow( $root->__freezedry, $root_id );
@@ -132,7 +135,7 @@ sub fetch_root {
 
     $self->_weak( $root_id, $root );
     
-    $record_store->unlock;
+#    $record_store->unlock;
     return $root;
 } #fetch_root
 
@@ -150,7 +153,7 @@ sub save {
 
     my $record_store = $self->[RECORD_STORE];
 
-    $record_store->lock;
+#    $record_store->lock;
 
     $record_store->use_transaction unless $self->[OPTIONS]{no_transactions};
 
@@ -194,7 +197,7 @@ sub save {
     }
     $record_store->commit_transaction unless $self->[OPTIONS]{no_transactions};
 
-    $record_store->unlock;
+#    $record_store->unlock;
 
     return 1;
 } #save
@@ -219,21 +222,24 @@ sub _fetch {
     } else {
         $obj = $self->[WEAK]{$id};
     }
-
+ 
     return $obj if $obj;
     
     my $record_store = $self->[RECORD_STORE];
-    $record_store->lock;
+#    my $locked = $record_store->is_locked;
+#    $locked || $record_store->lock;
 
     my ( $update_time, $creation_time, $record ) = $record_store->fetch( $id );
 
     unless (defined $record) {
-        $record_store->unlock unless $no_unlock;
+#        $no_unlock || $record_store->unlock;
+#        $no_unlock || $locked || $record_store->unlock;
         return undef;
     }
     $obj = $self->_reconstitute( $id, $record, $update_time, $creation_time );
     $self->_weak( $id, $obj );
-    $record_store->unlock;
+#    $record_store->unlock;
+#    $locked || $record_store->unlock;
     return $obj;
 } #fetch
 
@@ -295,7 +301,7 @@ Returns true if the object need saving.
 
 sub is_dirty {
     my ($self,$obj) = @_;
-    my $id = $self->_id( $obj );
+    my $id = $self->id( $obj );
     return defined( $self->[DIRTY]{$id} );
 }
 
@@ -309,7 +315,12 @@ sub _id_is_referenced {
 
 
 
-sub _id {
+=head2 id(obj)
+
+Returns id of object, creating it if necessary.
+
+=cut
+sub id {
     my ($self, $item) = @_;
     my $r = ref( $item );
     if ($r eq 'ARRAY') {
@@ -387,7 +398,7 @@ sub _xform_in {
     my ($self,$item) = @_;
     my $r = ref( $item );
     if ($r) {
-        return 'r' . $self->_id( $item );
+        return 'r' . $self->id( $item );
     }
     elsif (defined $item) {
         return "v$item";
@@ -436,9 +447,9 @@ sub _reconstitute {
 sub _new_id {
     my $self = shift;
     my $record_store = $self->[RECORD_STORE];
-    $record_store->lock;
+#    $record_store->lock;
     my $id = $self->[RECORD_STORE]->next_id;
-    $record_store->unlock;
+#    $record_store->unlock;
     return $id;
 } #_new_id
 
@@ -455,9 +466,9 @@ Returs the highest id in the store.
 =cut
 sub max_id {
     my $rs = shift->[RECORD_STORE];
-    $rs->lock;
+#    $rs->lock;
     my $c = $rs->record_count;
-    $rs->unlock;
+#    $rs->unlock;
     return $c;
 }
 
@@ -512,10 +523,10 @@ sub copy_store {
         $@ = "copy_store must be called with a destination store";
         return 0;
     }
-    $destination_store->lock;
+#    $destination_store->lock;
 
     my $record_store = $self->[RECORD_STORE];
-    $record_store->lock;
+#    $record_store->lock;
 
     # mark seen items
     my $silo = Yote::RecordStore::Silo->open_silo( $record_store->directory . '/vacuum', "I" );
@@ -550,8 +561,8 @@ sub copy_store {
     # finds the data that should be copied over
     $mark->( "r" . $record_store->first_id );
     
-    $record_store->unlock;
-    $destination_store->unlock;
+#    $record_store->unlock;
+#    $destination_store->unlock;
 
     return 1;
 
