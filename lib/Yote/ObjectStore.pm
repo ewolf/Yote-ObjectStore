@@ -83,6 +83,23 @@ sub open_object_store {
     return $store;
 }
 
+=head2 lock()
+
+Locks the record store
+
+=cut
+sub lock {
+    shift->[RECORD_STORE]->lock;    
+}
+
+=head2 unlock()
+
+Unlocks the record store
+
+=cut
+sub unlock {
+    shift->[RECORD_STORE]->unlock;    
+}
 
 =head2 fetch_root()
 

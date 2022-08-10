@@ -579,6 +579,8 @@ is( $hashcopy->{obj}, $hashcopy->{obj}->get_obj, "obj copy copy" );
     is_deeply( [sort @{$obj->fields}], [ 'foo', 'zip' ], 'object fields' );
     is ($obj->get_foo, 'bar', 'bar field' );
     is ($obj->get_zip, undef, 'zip field' );
+    ok ($object_store->lock, 'store locked');
+    ok ($object_store->unlock, 'store unlocked');
 
 }
 
