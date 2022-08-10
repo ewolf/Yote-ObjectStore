@@ -665,7 +665,7 @@ sub new_rs {
     # make a test db
     my $dir = $self->{args}{directory} = $self->new_db_name;
     my $locker = Yote::Locker->new( "$dir/LOCK" );
-    my $store = Yote::RecordStore->open_store( $dir, locker => $locker );
+    my $store = Yote::RecordStore->open_store( directory => $dir, locker => $locker );
     $store->lock;
     return $store;
 }
@@ -673,7 +673,7 @@ sub reopen {
     my( $cls, $oldstore ) = @_;
     my $dir = $oldstore->[0];
     my $locker = Yote::Locker->new( "$dir/LOCK" );
-    return Yote::RecordStore->open_store( $dir, locker => $locker );
+    return Yote::RecordStore->open_store( directory => $dir, locker => $locker );
 }
 sub teardown {
     my $self = shift;
